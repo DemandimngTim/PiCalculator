@@ -1,0 +1,17 @@
+# Compiled executable
+pi
+
+# Generated pi outputs
+pi_*.txt
+
+# Downloaded reference files
+reference/*.txt
+
+# Temporary downloads
+temp/
+
+# Benchmark output
+benchmarks/
+
+# Profiles (optional)
+profiles/
