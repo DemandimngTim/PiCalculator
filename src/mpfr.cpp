@@ -27,7 +27,7 @@ void calculate_pi_mpfr(
     // ~3.322 bits per decimal digit
 
     mpfr_prec_t precision =
-        (digits * 3322) / 1000 + 64;
+        (digits * 3322) / 1000 + 16;
 
 
 

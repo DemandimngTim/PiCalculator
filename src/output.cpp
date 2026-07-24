@@ -1,10 +1,7 @@
 // ======================================================
 // output.cpp
 // π file writer
-// Fixed:
-// - No scientific notation
-// - Exact digit count
-// - Cleaner MPFR extraction
+// Optimized MPFR extraction + buffered output
 // ======================================================
 
 #include "pi.h"
@@ -12,10 +9,10 @@
 #include <iostream>
 #include <cstdio>
 #include <string>
-#include <cstdlib>
 
 
 using namespace std;
+
 
 
 void save_pi(
@@ -34,7 +31,7 @@ void save_pi(
     << "Saving file...\n";
 
 
-    auto start =
+    auto total_start =
         chrono::high_resolution_clock::now();
 
 
@@ -42,7 +39,7 @@ void save_pi(
     FILE *file =
         fopen(
             filename.c_str(),
-            "w"
+            "wb"
         );
 
 
@@ -56,11 +53,10 @@ void save_pi(
 
 
 
-    // Large buffer for fast writing
-
     static char buffer[
         16 * 1024 * 1024
     ];
+
 
 
     setvbuf(
@@ -72,9 +68,14 @@ void save_pi(
 
 
 
-    // --------------------------------------------------
-    // Convert MPFR -> string
-    // --------------------------------------------------
+    // ==================================================
+    // MPFR -> decimal string
+    // ==================================================
+
+    auto convert_start =
+        chrono::high_resolution_clock::now();
+
+
 
     mpfr_exp_t exponent;
 
@@ -84,10 +85,15 @@ void save_pi(
             nullptr,
             &exponent,
             10,
-            digits + 1,
+            digits,
             pi,
             MPFR_RNDZ
         );
+
+
+
+    auto convert_end =
+        chrono::high_resolution_clock::now();
 
 
 
@@ -97,41 +103,60 @@ void save_pi(
         << "MPFR conversion failed ❌\n";
 
         fclose(file);
+
         return;
     }
 
 
 
-    // Example:
-    // exponent = 1
-    // digits_string = "314159..."
-    //
-    // Output:
-    // 3.14159...
+    cout
+    << "Conversion time: "
+    << elapsed(
+        convert_start,
+        convert_end
+    )
+    << "s\n";
+
+
+
+    // ==================================================
+    // Write file
+    // ==================================================
+
+    auto write_start =
+        chrono::high_resolution_clock::now();
+
 
 
     if(exponent <= 0)
     {
-        fprintf(
-            file,
-            "0."
+
+        fwrite(
+            "0.",
+            1,
+            2,
+            file
         );
 
 
         for(long i = 0; i < -exponent; i++)
+        {
             fputc(
                 '0',
                 file
             );
+        }
 
 
-        fprintf(
-            file,
-            "%s",
-            digits_string
+        fwrite(
+            digits_string,
+            1,
+            strlen(digits_string),
+            file
         );
 
     }
+
     else
     {
 
@@ -147,13 +172,21 @@ void save_pi(
         );
 
 
-        fprintf(
-            file,
-            "%s",
-            digits_string + 1
+        fwrite(
+            digits_string + 1,
+            1,
+            strlen(
+                digits_string + 1
+            ),
+            file
         );
 
     }
+
+
+
+    auto write_end =
+        chrono::high_resolution_clock::now();
 
 
 
@@ -162,12 +195,21 @@ void save_pi(
     );
 
 
-
     fclose(file);
 
 
 
-    auto end =
+    cout
+    << "Write time: "
+    << elapsed(
+        write_start,
+        write_end
+    )
+    << "s\n";
+
+
+
+    auto total_end =
         chrono::high_resolution_clock::now();
 
 
@@ -175,8 +217,8 @@ void save_pi(
     cout
     << "Save time: "
     << elapsed(
-        start,
-        end
+        total_start,
+        total_end
     )
     << "s\n\n";
 
