@@ -1,7 +1,7 @@
 // ======================================================
 // output.cpp
 // π file writer
-// Optimized MPFR extraction + buffered output
+// Optimized MPFR extraction
 // ======================================================
 
 #include "pi.h"
@@ -9,29 +9,30 @@
 #include <iostream>
 #include <cstdio>
 #include <string>
+#include <chrono>
 
 
 using namespace std;
 
 
+// ======================================================
+// Save π
+// ======================================================
 
 void save_pi(
     mpfr_t pi,
     long digits
 )
 {
-
     string filename =
-        "pi_" +
-        to_string(digits) +
-        ".txt";
+        "pi_" + to_string(digits) + ".txt";
 
 
     cout
     << "Saving file...\n";
 
 
-    auto total_start =
+    auto start =
         chrono::high_resolution_clock::now();
 
 
@@ -39,7 +40,7 @@ void save_pi(
     FILE *file =
         fopen(
             filename.c_str(),
-            "wb"
+            "w"
         );
 
 
@@ -58,7 +59,6 @@ void save_pi(
     ];
 
 
-
     setvbuf(
         file,
         buffer,
@@ -68,11 +68,11 @@ void save_pi(
 
 
 
-    // ==================================================
+    // --------------------------------------------------
     // MPFR -> decimal string
-    // ==================================================
+    // --------------------------------------------------
 
-    auto convert_start =
+    auto conversion_start =
         chrono::high_resolution_clock::now();
 
 
@@ -80,27 +80,27 @@ void save_pi(
     mpfr_exp_t exponent;
 
 
-    char *digits_string =
+    char *str =
         mpfr_get_str(
             nullptr,
             &exponent,
             10,
-            digits,
+            digits + 1,
             pi,
             MPFR_RNDZ
         );
 
 
 
-    auto convert_end =
+    auto conversion_end =
         chrono::high_resolution_clock::now();
 
 
 
-    if(!digits_string)
+    if(!str)
     {
         cout
-        << "MPFR conversion failed ❌\n";
+        << "Conversion failed ❌\n";
 
         fclose(file);
 
@@ -112,90 +112,47 @@ void save_pi(
     cout
     << "Conversion time: "
     << elapsed(
-        convert_start,
-        convert_end
+        conversion_start,
+        conversion_end
     )
     << "s\n";
 
 
 
-    // ==================================================
-    // Write file
-    // ==================================================
+    // --------------------------------------------------
+    // Write directly
+    // --------------------------------------------------
 
     auto write_start =
         chrono::high_resolution_clock::now();
 
 
 
-    if(exponent <= 0)
-    {
+    // π always starts with 3
 
-        fwrite(
-            "0.",
-            1,
-            2,
-            file
-        );
+    fputc(
+        str[0],
+        file
+    );
 
 
-        for(long i = 0; i < -exponent; i++)
-        {
-            fputc(
-                '0',
-                file
-            );
-        }
+    fputc(
+        '.',
+        file
+    );
 
 
-        fwrite(
-            digits_string,
-            1,
-            strlen(digits_string),
-            file
-        );
-
-    }
-
-    else
-    {
-
-        fputc(
-            digits_string[0],
-            file
-        );
-
-
-        fputc(
-            '.',
-            file
-        );
-
-
-        fwrite(
-            digits_string + 1,
-            1,
-            strlen(
-                digits_string + 1
-            ),
-            file
-        );
-
-    }
+    fwrite(
+        str + 1,
+        1,
+        digits,
+        file
+    );
 
 
 
     auto write_end =
         chrono::high_resolution_clock::now();
-
-
-
-    mpfr_free_str(
-        digits_string
-    );
-
-
-    fclose(file);
 
 
 
@@ -209,17 +166,24 @@ void save_pi(
 
 
 
-    auto total_end =
-        chrono::high_resolution_clock::now();
+    mpfr_free_str(
+        str
+    );
 
+
+    fclose(file);
+
+
+
+    auto end =
+        chrono::high_resolution_clock::now();
 
 
     cout
     << "Save time: "
     << elapsed(
-        total_start,
-        total_end
+        start,
+        end
     )
     << "s\n\n";
-
 }
