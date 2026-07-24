@@ -1,16 +1,19 @@
 // ======================================================
 // random.cpp
-// Verify++ random chunk checker
+// Verify++ spaced random chunk checker
 // ======================================================
 
 #include "pi.h"
 
 #include <iostream>
-#include <string>
+#include <vector>
 #include <random>
-
+#include <algorithm>
+#include <cstdlib>
+#include <string>
 
 using namespace std;
+
 
 
 void verify_random(
@@ -36,12 +39,10 @@ void verify_random(
     cout
     << "Random chunk verification 🔥\n";
 
-
     cout
     << "Checks: "
     << checks
     << "\n";
-
 
     cout
     << "Chunk size: "
@@ -50,15 +51,79 @@ void verify_random(
 
 
 
+    vector<long> positions;
+
+
     random_device rd;
-
-    mt19937 generator(rd());
-
+    mt19937_64 gen(rd());
 
 
-    uniform_int_distribution<long> distribution(
-        0,
-        digits - chunk_size
+    long min_distance =
+        chunk_size * 2;
+
+
+
+    int attempts = 0;
+
+    int max_attempts =
+        checks * 1000;
+
+
+
+    while((int)positions.size() < checks)
+    {
+
+        if(attempts++ > max_attempts)
+        {
+
+            cout
+            << "Could not find enough spaced positions, lowering distance...\n";
+
+            min_distance /= 2;
+
+            attempts = 0;
+        }
+
+
+
+        long max_pos =
+            digits - chunk_size;
+
+
+        long pos =
+            gen() % max_pos;
+
+
+
+        bool valid = true;
+
+
+
+        for(long old : positions)
+        {
+
+            if(llabs(pos - old) < min_distance)
+            {
+
+                valid = false;
+
+                break;
+            }
+        }
+
+
+
+        if(valid)
+        {
+            positions.push_back(pos);
+        }
+    }
+
+
+
+    sort(
+        positions.begin(),
+        positions.end()
     );
 
 
@@ -66,18 +131,13 @@ void verify_random(
     for(int i = 0; i < checks; i++)
     {
 
-        long position =
-            distribution(generator);
-
-
-
         cout
         << "Check "
         << i + 1
         << "/"
         << checks
         << " at "
-        << position
+        << positions[i]
         << "\n";
 
 
@@ -85,21 +145,20 @@ void verify_random(
         if(!compare_range(
             generated,
             reference,
-            position,
+            positions[i],
             chunk_size
         ))
         {
+
             cout
             << "Random verification failed ❌\n";
 
             return;
         }
-
     }
 
 
 
     cout
-    << "\nRandom verification passed ✅\n";
-
+    << "Random verification passed ✅\n";
 }
