@@ -19,6 +19,7 @@ using namespace std;
 // Implemented in other .cpp files
 // ======================================================
 
+void show_version();
 
 void run_benchmark(
     long digits
@@ -261,7 +262,11 @@ int run_command(
     }
 
 
-
+    if(string(argv[1]) == "--version")
+{
+    show_version();
+    return 0;
+}
 
 
     // --------------------------------------------------

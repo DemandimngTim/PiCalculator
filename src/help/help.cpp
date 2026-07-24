@@ -1,0 +1,11 @@
+#include "help.h"
+
+#include "index/help.h"
+#include "generation/help.h"
+#include "verification/help.h"
+#include "benchmarking/help.h"
+#include "profiles/help.h"
+#include "utilities/help.h"
+#include "examples/help.h"
+#include "faq/help.h"
+#include "developer/help.h"

@@ -1,17 +1,60 @@
-# Compiled executable
+# ==========================
+# Build files
+# ==========================
+
 pi
+*.o
+*.obj
+build/
+out/
 
-# Generated pi outputs
+
+# ==========================
+# Generated π output
+# ==========================
+
 pi_*.txt
-
-# Downloaded reference files
-reference/*.txt
-
-# Temporary downloads
+output/
+reference/
 temp/
 
-# Benchmark output
-benchmarks/
 
-# Profiles (optional)
+# ==========================
+# Benchmarks / profiling
+# ==========================
+
+benchmarks/
 profiles/
+
+
+# ==========================
+# Termux / compiler stuff
+# ==========================
+
+*.a
+*.so
+*.log
+
+
+# ==========================
+# Editors
+# ==========================
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+
+# ==========================
+# OS files
+# ==========================
+
+.DS_Store
+Thumbs.db
+
+# =========================
+# Other
+# =========================
+
+PiCalculator_backup/
