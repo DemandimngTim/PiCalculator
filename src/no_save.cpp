@@ -51,7 +51,7 @@ void run_no_save(
     // Move digit argument
 
     DIGITS =
-        atol(
+        parse_digits(
             argv[2]
         );
 

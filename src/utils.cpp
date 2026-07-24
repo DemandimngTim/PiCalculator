@@ -6,13 +6,123 @@
 
 #include "pi.h"
 
+#include <exception>
+#include <cstdlib>
+#include <stdexcept>
 #include <iostream>
 #include <iomanip>
 #include <sched.h>
+#include <algorithm>
+#include <cctype>
+
+long long parse_digits(
+    const std::string &text
+)
+{
+
+    if(text.empty())
+{
+    std::cerr
+    << "Invalid digit count ❌\n";
+
+    std::exit(EXIT_FAILURE);
+}
+
+
+    std::string value =
+        text;
+
+
+    // -----------------------------------------
+    // Remove commas and underscores
+    // -----------------------------------------
+
+    value.erase(
+        remove(
+            value.begin(),
+            value.end(),
+            ','
+        ),
+        value.end()
+    );
+
+    value.erase(
+        remove(
+            value.begin(),
+            value.end(),
+            '_'
+        ),
+        value.end()
+    );
+
+
+    char suffix =
+        std::tolower(
+            value.back()
+        );
+
+
+    double multiplier = 1.0;
+
+
+    if(
+        suffix == 'k' ||
+        suffix == 'm' ||
+        suffix == 'b' ||
+        suffix == 't'
+    )
+    {
+
+        value.pop_back();
+
+        switch(suffix)
+        {
+
+            case 'k':
+                multiplier = 1e3;
+                break;
+
+            case 'm':
+                multiplier = 1e6;
+                break;
+
+            case 'b':
+                multiplier = 1e9;
+                break;
+
+            case 't':
+                multiplier = 1e12;
+                break;
+
+        }
+
+    }
+
+
+    try
+{
+    double number =
+        stod(value);
+
+    if(number <= 0)
+        throw std::invalid_argument("Invalid");
+
+    return
+        static_cast<long long>(
+            number * multiplier
+        );
+}
+catch(...)
+{
+    std::cerr
+    << "Invalid digit count ❌\n";
+
+    std::exit(EXIT_FAILURE);
+}
+
+}
 
 using namespace std;
-
-
 
 // ======================================================
 // Global settings
@@ -91,3 +201,4 @@ double elapsed(
     ).count();
 
 }
+

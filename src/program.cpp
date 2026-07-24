@@ -44,7 +44,7 @@ int run_program(
 
 
     DIGITS =
-        atol(argv[1]);
+        parse_digits(argv[1]);
 
 
 

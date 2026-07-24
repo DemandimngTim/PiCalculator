@@ -53,6 +53,10 @@ void run_stress(
 
 void run_memory();
 
+void run_verify(
+    int argc,
+    char **argv
+);
 
 void run_verify_plus(
     int argc,
@@ -134,7 +138,7 @@ int run_command(
 
 
         run_benchmark(
-            atol(argv[2])
+            parse_digits(argv[2])
         );
 
 
@@ -161,7 +165,7 @@ int run_command(
 
 
         run_benchmark_plus(
-            atol(argv[2])
+            parse_digits(argv[2])
         );
 
 
@@ -264,7 +268,15 @@ int run_command(
     // Verification
     // --------------------------------------------------
 
+    if(command == "--verify")
+{
+    run_verify(
+        argc,
+        argv
+    );
 
+    return 1;
+}
     if(command == "--verify++")
     {
 

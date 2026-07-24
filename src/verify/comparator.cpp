@@ -1,7 +1,10 @@
+
 // ======================================================
 // comparator.cpp
-// Verify++ comparison modes
+// Verify++ comparison engine
 // ======================================================
+
+#include "pi.h"
 
 #include <iostream>
 #include <fstream>
@@ -11,27 +14,32 @@
 using namespace std;
 
 
+// ======================================================
+// Compare complete files
+// ======================================================
 
 bool compare_files(
     string generated,
     string reference
 )
 {
-
     ifstream a(generated);
     ifstream b(reference);
 
 
     if(!a || !b)
+    {
+        cout
+        << "Could not open files ❌\n";
+
         return false;
+    }
 
 
     char x;
     char y;
 
-
     long position = 0;
-
 
 
     while(
@@ -42,9 +50,8 @@ bool compare_files(
 
         if(x != y)
         {
-
             cout
-            << "\nMismatch at digit "
+            << "\nMismatch at position "
             << position
             << " ❌\n";
 
@@ -58,123 +65,169 @@ bool compare_files(
             << y
             << "\n";
 
-
             return false;
-
         }
 
 
         position++;
 
 
-        if(position % 10000 == 0)
+        if(position % 1000000 == 0)
         {
             cout
             << "\rChecked "
             << position
-            << " digits"
+            << " characters"
             << flush;
         }
 
     }
 
 
-    cout << "\n";
+
+    // Generated has extra data
+
+    if(a.get(x))
+    {
+        cout
+        << "\nGenerated file longer than reference ❌\n";
+
+        return false;
+    }
+
+
+
+    // Reference has extra data
+
+    if(b.get(y))
+    {
+        cout
+        << "\nReference file longer than generated ❌\n";
+
+        return false;
+    }
+
+
+
+    cout
+    << "\nChecked "
+    << position
+    << " characters\n";
+
 
     return true;
-
 }
 
 
 
 
+// ======================================================
+// Compare a range of characters
+// Used by:
+// - middle verification
+// - end verification
+// - random verification
+// ======================================================
 
-void verify_full(
-    long digits
+bool compare_range(
+    string generated,
+    string reference,
+    long start,
+    long length
 )
 {
 
-    string generated =
-        "pi_" +
-        to_string(digits) +
-        ".txt";
-
-
-    string reference =
-        "reference/pi_" +
-        to_string(digits) +
-        ".txt";
+    ifstream a(generated);
+    ifstream b(reference);
 
 
 
-    cout
-    << "Full verification 🔥\n";
-
-
-
-    if(compare_files(
-        generated,
-        reference
-    ))
+    if(!a || !b)
     {
         cout
-        << "All digits match ✅\n";
+        << "Could not open files ❌\n";
+
+        return false;
     }
-    else
+
+
+
+    a.seekg(start);
+    b.seekg(start);
+
+
+
+    char x;
+    char y;
+
+
+
+    for(
+        long i = 0;
+        i < length;
+        i++
+    )
     {
-        cout
-        << "Verification failed ❌\n";
+
+        if(
+            !a.get(x) ||
+            !b.get(y)
+        )
+        {
+            cout
+            << "\nReached file end unexpectedly ❌\n";
+
+            return false;
+        }
+
+
+
+        if(x != y)
+        {
+
+            cout
+            << "\nMismatch at position "
+            << start + i
+            << " ❌\n";
+
+
+            cout
+            << "Generated: "
+            << x
+            << "\n";
+
+
+            cout
+            << "Reference: "
+            << y
+            << "\n";
+
+
+            return false;
+        }
+
+
+
+        if(i % 100000 == 0)
+        {
+            cout
+            << "\rChecked "
+            << i
+            << "/"
+            << length
+            << " characters"
+            << flush;
+        }
+
     }
 
-}
 
-
-
-
-
-void verify_random(
-    long digits
-)
-{
 
     cout
-    << "Random digit verification 🔥\n";
-
-    cout
-    << "Coming soon (random mode)\n";
-
-}
+    << "\nChecked "
+    << length
+    << " characters\n";
 
 
-
-
-
-void verify_middle(
-    long digits
-)
-{
-
-    cout
-    << "Middle digit verification 🔥\n";
-
-    cout
-    << "Coming soon (middle mode)\n";
-
-}
-
-
-
-
-
-void verify_end(
-    long digits
-)
-{
-
-    cout
-    << "End digit verification 🔥\n";
-
-    cout
-    << "Coming soon (end mode)\n";
-
+    return true;
 }

@@ -1,0 +1,6478 @@
+===== ./src/calculator.cpp =====
+// ======================================================
+// calculator.cpp
+// Chudnovsky π engine
+// ======================================================
+
+#include "pi.h"
+
+#include <gmp.h>
+#include <mpfr.h>
+
+#include <thread>
+#include <atomic>
+
+using namespace std;
+
+
+// Chudnovsky constants
+
+const long A = 13591409;
+const long B = 545140134;
+
+
+// Progress counter
+extern atomic<long> terms_done;
+
+
+// Tree settings
+extern int MAX_TREE_DEPTH;
+
+
+// ======================================================
+// Binary split structure
+// ======================================================
+
+void bs_init(
+    BS &x
+)
+{
+    mpz_init(x.P);
+    mpz_init(x.Q);
+    mpz_init(x.T);
+}
+
+
+
+void bs_clear(
+    BS &x
+)
+{
+    mpz_clear(x.P);
+    mpz_clear(x.Q);
+    mpz_clear(x.T);
+}
+// ======================================================
+// Binary split engine
+// Chudnovsky algorithm
+// ======================================================
+
+
+void binary_split(
+    long a,
+    long b,
+    BS &r,
+    int depth
+)
+{
+
+    // ------------------------------
+    // Leaf calculation
+    // ------------------------------
+
+    if(b - a == 1)
+    {
+
+        // First term
+
+        if(a == 0)
+        {
+
+            mpz_set_ui(
+                r.P,
+                1
+            );
+
+            mpz_set_ui(
+                r.Q,
+                1
+            );
+
+            mpz_set_si(
+                r.T,
+                A
+            );
+
+        }
+
+        else
+        {
+
+            // P = (6a-5)(2a-1)(6a-1)
+
+            mpz_set_si(
+                r.P,
+                6*a - 5
+            );
+
+
+            mpz_mul_si(
+                r.P,
+                r.P,
+                2*a - 1
+            );
+
+
+            mpz_mul_si(
+                r.P,
+                r.P,
+                6*a - 1
+            );
+
+
+
+            // Q = 10939058860032000*a³
+
+            mpz_set_ui(
+                r.Q,
+                10939058860032000ULL
+            );
+
+
+            mpz_mul_ui(
+                r.Q,
+                r.Q,
+                a
+            );
+
+
+            mpz_mul_ui(
+                r.Q,
+                r.Q,
+                a
+            );
+
+
+            mpz_mul_ui(
+                r.Q,
+                r.Q,
+                a
+            );
+
+
+
+            // T = P*(A+B*a)
+
+            mpz_set_si(
+                r.T,
+                A + B*a
+            );
+
+
+            mpz_mul(
+                r.T,
+                r.T,
+                r.P
+            );
+
+
+            // Alternating signs
+
+            if(a % 2)
+            {
+
+                mpz_neg(
+                    r.T,
+                    r.T
+                );
+
+            }
+
+        }
+
+
+        terms_done++;
+
+        return;
+
+    }
+
+
+
+    // ------------------------------
+    // Split recursively
+    // ------------------------------
+
+    long mid =
+        (a + b) / 2;
+
+
+
+    BS left;
+    BS right;
+
+
+    bs_init(left);
+    bs_init(right);
+
+
+
+    // ------------------------------
+    // Parallel branch
+    // ------------------------------
+
+    if(
+        depth < MAX_TREE_DEPTH
+    )
+    {
+
+        thread worker(
+            [&]()
+            {
+
+                set_core(7);
+
+
+                binary_split(
+                    a,
+                    mid,
+                    left,
+                    depth + 1
+                );
+
+            }
+        );
+
+
+
+        set_core(6);
+
+
+        binary_split(
+            mid,
+            b,
+            right,
+            depth + 1
+        );
+
+
+        worker.join();
+
+    }
+
+    else
+    {
+
+        binary_split(
+            a,
+            mid,
+            left,
+            depth + 1
+        );
+
+
+        binary_split(
+            mid,
+            b,
+            right,
+            depth + 1
+        );
+
+    }
+
+
+
+    // ------------------------------
+    // Combine nodes
+    //
+    // P = P1*P2
+    // Q = Q1*Q2
+    // T = T1*Q2 + P1*T2
+    // ------------------------------
+
+
+    mpz_mul(
+        r.P,
+        left.P,
+        right.P
+    );
+
+
+    mpz_mul(
+        r.Q,
+        left.Q,
+        right.Q
+    );
+
+
+
+    mpz_t temp;
+
+    mpz_init(temp);
+
+
+
+    mpz_mul(
+        r.T,
+        left.T,
+        right.Q
+    );
+
+
+    mpz_mul(
+        temp,
+        left.P,
+        right.T
+    );
+
+
+    mpz_add(
+        r.T,
+        r.T,
+        temp
+    );
+
+
+
+    mpz_clear(temp);
+
+
+
+    bs_clear(left);
+    bs_clear(right);
+
+}
+
+
+
+
+
+// ======================================================
+// Chudnovsky calculation wrapper
+// ======================================================
+
+
+void calculate_chudnovsky(
+    long terms,
+    BS &result
+)
+{
+
+    terms_done = 0;
+
+
+    set_core(6);
+
+
+    binary_split(
+        0,
+        terms,
+        result,
+        0
+    );
+
+}
+===== ./src/commands.cpp =====
+// ======================================================
+// commands.cpp
+// Command router for all -- functions
+// ======================================================
+
+#include "pi.h"
+#include "commands.h"
+
+#include <iostream>
+#include <string>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Command declarations
+// Implemented in other .cpp files
+// ======================================================
+
+
+void run_benchmark(
+    long digits
+);
+
+
+void run_benchmark_plus(
+    long digits
+);
+
+
+void run_estimate(
+    int argc,
+    char **argv
+);
+
+
+void run_no_save(
+    int argc,
+    char **argv
+);
+
+
+void run_speedtest();
+
+
+void run_stress(
+    int argc,
+    char **argv
+);
+
+
+void run_memory();
+
+
+void run_verify_plus(
+    int argc,
+    char **argv
+);
+
+
+void run_profile_save(
+    int argc,
+    char **argv
+);
+
+
+void run_profile(
+    int argc,
+    char **argv
+);
+
+
+void run_profile_list();
+
+
+void run_auto(
+    int argc,
+    char **argv
+);
+
+
+void run_mpmath(
+    int argc,
+    char **argv
+);
+
+
+
+// ======================================================
+// Main command router
+//
+// Returns:
+// 1  = command handled
+// 0  = normal calculation
+// ======================================================
+
+
+int run_command(
+    int argc,
+    char **argv
+)
+{
+
+    if(argc < 2)
+        return 0;
+
+
+
+    string command =
+        argv[1];
+
+
+
+
+    // --------------------------------------------------
+    // Benchmark
+    // --------------------------------------------------
+
+
+    if(command == "--benchmark")
+    {
+
+        if(argc < 3)
+        {
+
+            cout
+            << "Usage: ./pi --benchmark digits\n";
+
+            return 1;
+
+        }
+
+
+        run_benchmark(
+            parse_digits(argv[2])
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--benchmark++")
+    {
+
+        if(argc < 3)
+        {
+
+            cout
+            << "Usage: ./pi --benchmark++ digits\n";
+
+            return 1;
+
+        }
+
+
+        run_benchmark_plus(
+            parse_digits(argv[2])
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Calculation options
+    // --------------------------------------------------
+
+
+    if(command == "--estimate")
+    {
+
+        run_estimate(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--no-save")
+    {
+
+        run_no_save(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // System tools
+    // --------------------------------------------------
+
+
+    if(command == "--speedtest")
+    {
+
+        run_speedtest();
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--memory")
+    {
+
+        run_memory();
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--stress")
+    {
+
+        run_stress(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Verification
+    // --------------------------------------------------
+
+
+    if(command == "--verify++")
+    {
+
+        run_verify_plus(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Profiles
+    // --------------------------------------------------
+
+
+    if(command == "--profile-save")
+    {
+
+        run_profile_save(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--profile")
+    {
+
+        run_profile(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--profile-list")
+    {
+
+        run_profile_list();
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Automation
+    // --------------------------------------------------
+
+
+    if(command == "--auto")
+    {
+
+        run_auto(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Alternative calculators
+    // --------------------------------------------------
+
+
+    if(command == "--mpmath")
+    {
+
+        run_mpmath(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // Unknown command
+    // Let normal parser handle it
+    // --------------------------------------------------
+
+
+    return 0;
+
+}
+===== ./src/benchmark.cpp =====
+// ======================================================
+// benchmark.cpp
+// --benchmark system
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Run one benchmark
+// ======================================================
+
+
+double run_single_benchmark(
+    long digits,
+    int depth
+)
+{
+
+    DIGITS =
+        digits;
+
+
+    MAX_TREE_DEPTH =
+        depth;
+
+
+
+    BS result;
+
+    bs_init(
+        result
+    );
+
+
+
+    long terms =
+        DIGITS / 14 + 2;
+
+
+
+    auto start =
+        chrono::high_resolution_clock::now();
+
+
+
+    calculate_chudnovsky(
+        terms,
+        result
+    );
+
+
+
+    auto end =
+        chrono::high_resolution_clock::now();
+
+
+
+    double time =
+        elapsed(
+            start,
+            end
+        );
+
+
+
+    bs_clear(
+        result
+    );
+
+
+
+    return time;
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// Median helper
+// ======================================================
+
+
+double median(
+    vector<double> values
+)
+{
+
+    sort(
+        values.begin(),
+        values.end()
+    );
+
+
+    return values[
+        values.size() / 2
+    ];
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// Main benchmark command
+// ======================================================
+
+
+void run_benchmark(
+    long digits
+)
+{
+
+    vector<int> depths =
+    {
+        0,
+        1,
+        2,
+        3,
+        4
+    };
+
+
+
+    double best_time =
+        999999;
+
+
+    int best_depth =
+        0;
+
+
+
+
+    cout
+    << "Starting benchmark 🔥\n\n";
+
+
+
+
+
+    for(int depth : depths)
+    {
+
+        cout
+        << "Testing depth "
+        << depth
+        << "...\n\n";
+
+
+
+        vector<double> results;
+
+
+
+
+
+        for(int run = 1; run <= 3; run++)
+        {
+
+            double time =
+                run_single_benchmark(
+                    digits,
+                    depth
+                );
+
+
+
+            results.push_back(
+                time
+            );
+
+
+
+            cout
+            << "Run "
+            << run
+            << ": "
+            << time
+            << "s\n";
+
+        }
+
+
+
+
+
+        double med =
+            median(
+                results
+            );
+
+
+
+        cout
+        << "Median: "
+        << med
+        << "s\n\n";
+
+
+
+
+
+
+        if(med < best_time)
+        {
+
+            best_time =
+                med;
+
+
+            best_depth =
+                depth;
+
+        }
+
+    }
+
+
+
+
+
+
+
+    cout
+    << "====================\n";
+
+
+    cout
+    << "Best depth: "
+    << best_depth
+    << " 🔥\n";
+
+
+    cout
+    << "Median time: "
+    << best_time
+    << "s\n";
+
+
+    cout
+    << "====================\n";
+
+}
+===== ./src/output.cpp =====
+// ======================================================
+// output.cpp
+// π file writer
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <cstdio>
+#include <string>
+
+
+using namespace std;
+
+
+
+void save_pi(
+    mpfr_t pi,
+    long digits
+)
+{
+
+    string filename =
+        "pi_" +
+        to_string(digits) +
+        ".txt";
+
+
+
+    cout
+    << "Saving file...\n";
+
+
+
+    auto start =
+        chrono::high_resolution_clock::now();
+
+
+
+
+    FILE *file =
+        fopen(
+            filename.c_str(),
+            "w"
+        );
+
+
+
+    if(!file)
+    {
+
+        cout
+        << "File open failed ❌\n";
+
+        return;
+
+    }
+
+
+
+
+    static char buffer[
+        16 * 1024 * 1024
+    ];
+
+
+
+    setvbuf(
+        file,
+        buffer,
+        _IOFBF,
+        sizeof(buffer)
+    );
+
+
+
+
+    // Write directly from MPFR
+
+    mpfr_out_str(
+        file,
+        10,
+        digits + 1,
+        pi,
+        MPFR_RNDN
+    );
+
+
+
+    fclose(file);
+
+
+
+
+    auto end =
+        chrono::high_resolution_clock::now();
+
+
+
+    cout
+    << "Save time: "
+    << elapsed(
+        start,
+        end
+    )
+    << "s\n\n";
+
+}
+===== ./src/verify.cpp =====
+// ======================================================
+// verify.cpp
+// Chunk 6.5
+// Verify++ main system
+// ======================================================
+
+#include "verify.h"
+
+#include <cstdlib>
+#include <iostream>
+#include <fstream>
+#include <string>
+
+
+bool reference_exists(
+    long digits
+);
+
+bool prepare_reference(
+    long digits
+);
+
+void verify_full(
+    long digits
+);
+
+void verify_random(
+    long digits
+);
+
+void verify_middle(
+    long digits
+);
+
+void verify_end(
+    long digits
+);
+
+
+
+using namespace std;
+
+
+
+void run_verify_plus(
+    int argc,
+    char **argv
+)
+{
+
+    if(argc < 3)
+    {
+        cout
+        << "Usage:\n"
+        << "./pi --verify++ digits[-random|-middle|-end]\n";
+
+        return;
+    }
+
+
+
+    string arg =
+        argv[2];
+
+
+
+    string mode =
+        "full";
+
+
+
+    if(arg.find("-random") != string::npos)
+    {
+        mode = "random";
+        arg =
+            arg.substr(
+                0,
+                arg.find("-random")
+            );
+    }
+
+    else if(arg.find("-middle") != string::npos)
+    {
+        mode = "middle";
+        arg =
+            arg.substr(
+                0,
+                arg.find("-middle")
+            );
+    }
+
+    else if(arg.find("-end") != string::npos)
+    {
+        mode = "end";
+        arg =
+            arg.substr(
+                0,
+                arg.find("-end")
+            );
+    }
+
+
+
+    long digits =
+        parse_digits(
+            arg.c_str()
+        );
+
+
+
+    cout
+    << "Verify++ 🔥\n\n";
+
+
+
+    if(!prepare_reference(digits))
+    {
+        cout
+        << "Cannot continue ❌\n";
+
+        return;
+    }
+
+
+
+    if(mode == "random")
+        verify_random(digits);
+
+    else if(mode == "middle")
+        verify_middle(digits);
+
+    else if(mode == "end")
+        verify_end(digits);
+
+    else
+        verify_full(digits);
+
+
+
+    cout
+    << "\nVerify++ complete 🔥\n";
+
+}
+===== ./src/utils.cpp =====
+// ======================================================
+// utils.cpp
+// Shared utilities + global settings
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <iomanip>
+#include <sched.h>
+#include <algorithm>
+#include <cctype>
+
+long long parse_digits(
+    const std::string &text
+)
+{
+
+    if(text.empty())
+        return 0;
+
+
+    std::string value =
+        text;
+
+
+    // -----------------------------------------
+    // Remove commas and underscores
+    // -----------------------------------------
+
+    value.erase(
+        remove(
+            value.begin(),
+            value.end(),
+            ','
+        ),
+        value.end()
+    );
+
+    value.erase(
+        remove(
+            value.begin(),
+            value.end(),
+            '_'
+        ),
+        value.end()
+    );
+
+
+    char suffix =
+        std::tolower(
+            value.back()
+        );
+
+
+    double multiplier = 1.0;
+
+
+    if(
+        suffix == 'k' ||
+        suffix == 'm' ||
+        suffix == 'b' ||
+        suffix == 't'
+    )
+    {
+
+        value.pop_back();
+
+        switch(suffix)
+        {
+
+            case 'k':
+                multiplier = 1e3;
+                break;
+
+            case 'm':
+                multiplier = 1e6;
+                break;
+
+            case 'b':
+                multiplier = 1e9;
+                break;
+
+            case 't':
+                multiplier = 1e12;
+                break;
+
+        }
+
+    }
+
+
+    double number =
+        stod(value);
+
+
+    return
+        static_cast<long long>(
+            number * multiplier
+        );
+
+}
+
+using namespace std;
+
+// ======================================================
+// Global settings
+// ======================================================
+
+
+long DIGITS = 1000000;
+
+
+int MAX_TREE_DEPTH = 2;
+
+
+bool NO_SAVE = false;
+
+
+
+// ======================================================
+// Progress system data
+// ======================================================
+
+
+atomic<long> terms_done(0);
+
+
+
+
+// ======================================================
+// CPU core pinning
+// ======================================================
+
+
+void set_core(
+    int core
+)
+{
+
+    cpu_set_t set;
+
+
+    CPU_ZERO(
+        &set
+    );
+
+
+    CPU_SET(
+        core,
+        &set
+    );
+
+
+    sched_setaffinity(
+        0,
+        sizeof(set),
+        &set
+    );
+
+}
+
+
+
+
+
+// ======================================================
+// Timing helper
+// ======================================================
+
+
+double elapsed(
+    chrono::high_resolution_clock::time_point start,
+    chrono::high_resolution_clock::time_point end
+)
+{
+
+    return chrono::duration<double>(
+        end - start
+    ).count();
+
+}
+
+===== ./src/estimate.cpp =====
+// ======================================================
+// estimate.cpp
+// --estimate system
+// Device + π calculation estimator
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <cmath>
+#include <sys/sysinfo.h>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Convert bytes into readable format
+// ======================================================
+
+
+string format_bytes(
+    unsigned long long bytes
+)
+{
+
+    const char *units[] =
+    {
+        "B",
+        "KB",
+        "MB",
+        "GB",
+        "TB",
+        "PB"
+    };
+
+
+
+    double size =
+        bytes;
+
+
+    int unit = 0;
+
+
+
+    while(
+        size >= 1024 &&
+        unit < 5
+    )
+    {
+
+        size /= 1024;
+        unit++;
+
+    }
+
+
+
+    stringstream ss;
+
+
+    ss
+    << fixed
+    << setprecision(2)
+    << size
+    << " "
+    << units[unit];
+
+
+    return ss.str();
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// Detect RAM
+// ======================================================
+
+
+unsigned long long get_ram()
+{
+
+    struct sysinfo info;
+
+
+
+    if(sysinfo(&info) == 0)
+    {
+
+        return
+            (unsigned long long)
+            info.totalram *
+            info.mem_unit;
+
+    }
+
+
+
+    return 0;
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// Time estimation
+//
+// Based on benchmark data:
+//
+// 5M digits ≈ 4.1 seconds
+//
+// Future:
+// Replace with benchmark database
+//
+// ======================================================
+
+
+double estimate_time(
+    long digits
+)
+{
+
+    double base_digits =
+        5000000.0;
+
+
+    double base_time =
+        4.1;
+
+
+
+    double ratio =
+        digits /
+        base_digits;
+
+
+
+    return
+        base_time *
+        pow(
+            ratio,
+            1.10
+        );
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// --estimate command
+// ======================================================
+
+
+void run_estimate(
+    int argc,
+    char **argv
+)
+{
+
+    if(argc < 3)
+    {
+
+        cout
+        << "Usage:\n";
+
+
+        cout
+        << "./pi --estimate digits\n";
+
+
+        return;
+
+    }
+
+
+
+
+
+    long digits =
+        parse_digits(
+            argv[2]
+        );
+
+
+
+
+
+
+
+    cout
+    << "π Calculation Estimate 🔥\n\n";
+
+
+
+    cout
+    << "Target digits: "
+    << digits
+    << "\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // Storage
+    // ==================================================
+
+
+    unsigned long long output_size =
+        digits;
+
+
+
+    cout
+    << "Storage needed:\n";
+
+
+    cout
+    << "π text file: "
+    << format_bytes(
+        output_size
+    )
+    << "\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // RAM
+    // ==================================================
+
+
+    unsigned long long ram =
+        get_ram();
+
+
+
+    cout
+    << "Device RAM:\n";
+
+
+
+    if(ram)
+    {
+
+        cout
+        << format_bytes(
+            ram
+        )
+        << "\n";
+
+    }
+    else
+    {
+
+        cout
+        << "Unknown\n";
+
+    }
+
+
+
+    cout
+    << "\n";
+
+
+
+
+
+
+    unsigned long long estimated_ram =
+        digits * 2;
+
+
+
+    cout
+    << "Estimated calculation RAM:\n";
+
+
+    cout
+    << format_bytes(
+        estimated_ram
+    )
+    << "\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // Time
+    // ==================================================
+
+
+    double seconds =
+        estimate_time(
+            digits
+        );
+
+
+
+    cout
+    << "Estimated calculation time:\n";
+
+
+
+    if(seconds < 60)
+    {
+
+        cout
+        << seconds
+        << " seconds\n";
+
+    }
+    else if(seconds < 3600)
+    {
+
+        cout
+        << seconds / 60
+        << " minutes\n";
+
+    }
+    else if(seconds < 86400)
+    {
+
+        cout
+        << seconds / 3600
+        << " hours\n";
+
+    }
+    else
+    {
+
+        cout
+        << seconds / 86400
+        << " days\n";
+
+    }
+
+
+
+
+
+
+
+    // ==================================================
+    // Warnings
+    // ==================================================
+
+
+    cout
+    << "\n";
+
+
+
+    if(
+        ram &&
+        estimated_ram > ram
+    )
+    {
+
+        cout
+        << "⚠️ Warning: Estimated RAM exceeds device RAM\n";
+
+    }
+
+
+
+
+
+    if(
+        output_size > 100000000000ULL
+    )
+    {
+
+        cout
+        << "⚠️ Warning: Output file is extremely large\n";
+
+    }
+
+
+
+
+
+
+    cout
+    << "\n====================\n";
+
+
+    cout
+    << "Estimate complete 🔥\n";
+
+}
+===== ./src/no_save.cpp =====
+// ======================================================
+// no_save.cpp
+// --no-save command
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <cstdlib>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Disable saving output
+//
+// Usage:
+// ./pi --no-save digits [depth]
+//
+// ======================================================
+
+
+void run_no_save(
+    int argc,
+    char **argv
+)
+{
+
+    NO_SAVE = true;
+
+
+
+    if(argc < 3)
+    {
+
+        cout
+        << "Usage: ./pi --no-save digits [depth]\n";
+
+        return;
+
+    }
+
+
+
+
+
+
+    // Move digit argument
+
+    DIGITS =
+        parse_digits(
+            argv[2]
+        );
+
+
+
+
+
+
+    // Optional tree depth
+
+    if(argc > 3)
+    {
+
+        MAX_TREE_DEPTH =
+            atoi(
+                argv[3]
+            );
+
+    }
+
+
+
+}
+===== ./src/mpfr.cpp =====
+// ======================================================
+// mpfr.cpp
+// MPFR π conversion
+// ======================================================
+
+
+#include "pi.h"
+
+#include <mpfr.h>
+
+
+
+
+// ======================================================
+// Convert GMP binary split result into π
+// ======================================================
+
+
+void calculate_pi_mpfr(
+    BS &result,
+    mpfr_t pi,
+    long digits
+)
+{
+
+    // MPFR precision
+    // ~3.322 bits per decimal digit
+
+    mpfr_prec_t precision =
+        (digits * 3322) / 1000 + 64;
+
+
+
+    mpfr_set_prec(
+        pi,
+        precision
+    );
+
+
+
+    mpfr_t sqrtC;
+    mpfr_t q;
+    mpfr_t t;
+
+
+
+    mpfr_init2(
+        sqrtC,
+        precision
+    );
+
+
+    mpfr_init2(
+        q,
+        precision
+    );
+
+
+    mpfr_init2(
+        t,
+        precision
+    );
+
+
+
+
+    // 426880 * sqrt(10005)
+
+    mpfr_sqrt_ui(
+        sqrtC,
+        10005,
+        MPFR_RNDN
+    );
+
+
+    mpfr_mul_ui(
+        sqrtC,
+        sqrtC,
+        426880,
+        MPFR_RNDN
+    );
+
+
+
+
+    // GMP -> MPFR conversion
+
+    mpfr_set_z(
+        q,
+        result.Q,
+        MPFR_RNDN
+    );
+
+
+    mpfr_set_z(
+        t,
+        result.T,
+        MPFR_RNDN
+    );
+
+
+
+
+    // π = 426880*sqrt(10005)*Q/T
+
+    mpfr_div(
+        pi,
+        q,
+        t,
+        MPFR_RNDN
+    );
+
+
+    mpfr_mul(
+        pi,
+        pi,
+        sqrtC,
+        MPFR_RNDN
+    );
+
+
+
+
+    mpfr_clear(
+        sqrtC
+    );
+
+
+    mpfr_clear(
+        q
+    );
+
+
+    mpfr_clear(
+        t
+    );
+
+}
+===== ./src/program.cpp =====
+// ======================================================
+// program.cpp
+// Normal π calculation pipeline
+// ======================================================
+
+#include "pi.h"
+
+#include <iostream>
+#include <chrono>
+
+
+using namespace std;
+
+
+
+int run_program(
+    int argc,
+    char **argv
+)
+{
+
+    auto total_start =
+        chrono::high_resolution_clock::now();
+
+
+
+    if(argc < 2)
+    {
+
+        cout
+        << "Usage: ./pi digits [depth]\n";
+
+        return 1;
+
+    }
+
+
+
+
+
+    // ==================================================
+    // Parse arguments
+    // ==================================================
+
+
+    DIGITS =
+        parse_digits(argv[1]);
+
+
+
+    if(argc > 2)
+    {
+
+        MAX_TREE_DEPTH =
+            atoi(argv[2]);
+
+    }
+
+
+
+    if(MAX_TREE_DEPTH > 8)
+    {
+
+        cout
+        << "Tree depth limited to 8\n";
+
+
+        MAX_TREE_DEPTH = 8;
+
+    }
+
+
+
+
+
+
+    long terms =
+        DIGITS / 14 + 2;
+
+
+
+
+
+
+    cout
+    << "Starting GMP+MPFR Optimized Chudnovsky π 🔥\n\n";
+
+
+    cout
+    << "Digits: "
+    << DIGITS
+    << "\n";
+
+
+    cout
+    << "Tree depth: "
+    << MAX_TREE_DEPTH
+    << "\n";
+
+
+    cout
+    << "Terms needed: "
+    << terms
+    << "\n\n";
+
+
+
+
+
+
+    // ==================================================
+    // Binary split
+    // ==================================================
+
+
+    BS result;
+
+    bs_init(
+        result
+    );
+
+
+
+    cout
+    << "Calculating π:\n";
+
+
+
+    auto calc_start =
+        chrono::high_resolution_clock::now();
+
+
+
+    calculate_chudnovsky(
+        terms,
+        result
+    );
+
+
+
+    auto calc_end =
+        chrono::high_resolution_clock::now();
+
+
+
+    cout
+    << "Calculation time: "
+    << elapsed(
+        calc_start,
+        calc_end
+    )
+    << "s\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // MPFR conversion
+    // ==================================================
+
+
+    cout
+    << "Calculating π with MPFR...\n";
+
+
+
+    mpfr_t pi;
+
+    mpfr_init(
+        pi
+    );
+
+
+
+    auto mpfr_start =
+        chrono::high_resolution_clock::now();
+
+
+
+    calculate_pi_mpfr(
+        result,
+        pi,
+        DIGITS
+    );
+
+
+
+    auto mpfr_end =
+        chrono::high_resolution_clock::now();
+
+
+
+    cout
+    << "MPFR time: "
+    << elapsed(
+        mpfr_start,
+        mpfr_end
+    )
+    << "s\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // Save output
+    // ==================================================
+
+
+    if(NO_SAVE)
+    {
+
+        cout
+        << "Saving disabled ⏭️\n";
+
+    }
+    else
+    {
+
+        save_pi(
+            pi,
+            DIGITS
+        );
+
+    }
+
+
+
+
+
+
+
+    // ==================================================
+    // Cleanup
+    // ==================================================
+
+
+    mpfr_clear(
+        pi
+    );
+
+
+    bs_clear(
+        result
+    );
+
+
+
+
+
+
+
+    auto total_end =
+        chrono::high_resolution_clock::now();
+
+
+
+
+
+    cout
+    << "\n====================\n";
+
+
+    cout
+    << "Finished 🔥\n";
+
+
+    cout
+    << "Total time: "
+    << elapsed(
+        total_start,
+        total_end
+    )
+    << "s\n";
+
+
+
+    return 0;
+
+}
+===== ./src/benchmark_plus.cpp =====
+// ======================================================
+// benchmark_plus.cpp
+// --benchmark++ extension
+// Extra benchmark analysis
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Benchmark++
+//
+// Adds:
+// - CPU warm-up
+// - Normal benchmark reuse
+// - Extra analysis output
+//
+// ======================================================
+
+
+void run_benchmark_plus(
+    long digits
+)
+{
+
+    cout
+    << "Starting benchmark++ 🔥\n\n";
+
+
+
+    // ==================================================
+    // Warm-up
+    //
+    // Purpose:
+    // - Wake CPU
+    // - Fill caches
+    // - Reduce first-run spikes
+    //
+    // Result is ignored
+    // ==================================================
+
+
+    cout
+    << "Warm-up enabled ✅\n";
+
+
+    cout
+    << "Performing warm-up...\n";
+
+
+
+    run_single_benchmark(
+        digits,
+        1
+    );
+
+
+
+    cout
+    << "Warm-up complete ✅\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // Run normal benchmark
+    //
+    // Uses benchmark.cpp
+    // ==================================================
+
+
+    cout
+    << "Starting benchmark 🔥\n\n";
+
+
+    run_benchmark(
+        digits
+    );
+
+
+
+
+
+
+
+    // ==================================================
+    // Analysis report
+    // ==================================================
+
+
+    cout
+    << "\nBenchmark++ analysis 🔥\n";
+
+
+    cout
+    << "Warm-up: enabled\n";
+
+
+    cout
+    << "Median timing: enabled\n";
+
+
+    cout
+    << "Outlier protection: enabled\n";
+
+
+    cout
+    << "Depth comparison: enabled\n";
+
+
+
+
+
+    cout
+    << "\nBenchmark++ complete 🔥\n";
+
+}
+===== ./src/verify/reference.cpp =====
+// ======================================================
+// reference.cpp
+// Reference file manager
+// ======================================================
+
+#include "downloader.h"
+
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+
+
+using namespace std;
+
+namespace fs = filesystem;
+
+
+
+bool reference_exists(long digits)
+{
+    return fs::exists(
+        "reference/pi_" +
+        to_string(digits) +
+        ".txt"
+    );
+}
+
+
+
+bool validate_reference(
+    string file
+)
+{
+
+    ifstream input(file);
+
+
+
+    if(!input)
+        return false;
+
+
+
+    char a,b,c,d;
+
+
+
+    input >> a >> b >> c >> d;
+
+
+
+    // Should start with 3.14
+
+    return
+        a == '3' &&
+        b == '.' &&
+        c == '1' &&
+        d == '4';
+
+}
+
+
+
+
+
+bool install_reference(
+    long digits
+)
+{
+
+    string temp =
+        "temp/downloads/pi_" +
+        to_string(digits) +
+        ".download";
+
+
+    string final =
+        "reference/pi_" +
+        to_string(digits) +
+        ".txt";
+
+
+
+    if(!validate_reference(temp))
+    {
+
+        cout
+        << "Downloaded file invalid ❌\n";
+
+        return false;
+
+    }
+
+
+
+    fs::rename(
+        temp,
+        final
+    );
+
+
+
+    cout
+    << "Reference installed ✅\n";
+
+
+    return true;
+
+}
+
+
+
+
+
+bool prepare_reference(
+    long digits
+)
+{
+
+    if(reference_exists(digits))
+    {
+
+        cout
+        << "Reference found ✅\n";
+
+        return true;
+
+    }
+
+
+
+    cout
+    << "Reference file missing ❌\n";
+
+
+
+    cout
+    << "Required storage: "
+    << digits / 1024.0
+    << " KB\n\n";
+
+
+
+    cout
+    << "Download from piLookup.com? [y/n]: ";
+
+
+
+    char answer;
+
+    cin >> answer;
+
+
+
+    if(answer != 'y')
+        return false;
+
+
+
+
+    string temp =
+        "temp/downloads/pi_" +
+        to_string(digits) +
+        ".download";
+
+
+
+    if(!download_reference(
+        digits,
+        temp
+    ))
+    {
+
+        cout
+        << "Download failed ❌\n";
+
+        return false;
+
+    }
+
+
+
+    return install_reference(digits);
+
+}
+===== ./src/verify/downloader.cpp =====
+// ======================================================
+// downloader.cpp
+// ======================================================
+
+#include "downloader.h"
+
+#include <iostream>
+#include <cstdlib>
+
+
+using namespace std;
+
+
+
+bool download_reference(
+    long digits,
+    string output
+)
+{
+
+    string url =
+        "https://files.pilookup.com/pi/" +
+        to_string(digits) +
+        ".txt";
+
+
+
+    cout
+    << "Downloading...\n";
+
+
+
+    string command =
+        "curl -L \"" +
+        url +
+        "\" -o \"" +
+        output +
+        "\"";
+
+
+
+    int result =
+        system(
+            command.c_str()
+        );
+
+
+
+    return result == 0;
+
+}
+===== ./src/verify/comparator.cpp =====
+// ======================================================
+// comparator.cpp
+// Verify++ comparison modes
+// ======================================================
+
+#include <iostream>
+#include <fstream>
+#include <string>
+
+
+using namespace std;
+
+
+
+bool compare_files(
+    string generated,
+    string reference
+)
+{
+
+    ifstream a(generated);
+    ifstream b(reference);
+
+
+    if(!a || !b)
+        return false;
+
+
+    char x;
+    char y;
+
+
+    long position = 0;
+
+
+
+    while(
+        a.get(x) &&
+        b.get(y)
+    )
+    {
+
+        if(x != y)
+        {
+
+            cout
+            << "\nMismatch at digit "
+            << position
+            << " ❌\n";
+
+            cout
+            << "Generated: "
+            << x
+            << "\n";
+
+            cout
+            << "Reference: "
+            << y
+            << "\n";
+
+
+            return false;
+
+        }
+
+
+        position++;
+
+
+        if(position % 10000 == 0)
+        {
+            cout
+            << "\rChecked "
+            << position
+            << " digits"
+            << flush;
+        }
+
+    }
+
+
+    cout << "\n";
+
+    return true;
+
+}
+
+
+
+
+
+void verify_full(
+    long digits
+)
+{
+
+    string generated =
+        "pi_" +
+        to_string(digits) +
+        ".txt";
+
+
+    string reference =
+        "reference/pi_" +
+        to_string(digits) +
+        ".txt";
+
+
+
+    cout
+    << "Full verification 🔥\n";
+
+
+
+    if(compare_files(
+        generated,
+        reference
+    ))
+    {
+        cout
+        << "All digits match ✅\n";
+    }
+    else
+    {
+        cout
+        << "Verification failed ❌\n";
+    }
+
+}
+
+
+
+
+
+void verify_random(
+    long digits
+)
+{
+
+    cout
+    << "Random digit verification 🔥\n";
+
+    cout
+    << "Coming soon (random mode)\n";
+
+}
+
+
+
+
+
+void verify_middle(
+    long digits
+)
+{
+
+    cout
+    << "Middle digit verification 🔥\n";
+
+    cout
+    << "Coming soon (middle mode)\n";
+
+}
+
+
+
+
+
+void verify_end(
+    long digits
+)
+{
+
+    cout
+    << "End digit verification 🔥\n";
+
+    cout
+    << "Coming soon (end mode)\n";
+
+}
+===== ./src/commands/placeholders.cpp =====
+// ======================================================
+// Placeholder commands
+// ======================================================
+
+#include "pi.h"
+
+#include <iostream>
+
+
+using namespace std;
+
+
+
+void run_speedtest()
+{
+    cout << "Speedtest coming soon 🔥\n";
+}
+
+
+
+void run_memory()
+{
+    cout << "Memory monitor coming soon 🔥\n";
+}
+
+
+
+void run_stress(
+    int argc,
+    char **argv
+)
+{
+    cout << "Stress test coming soon 🔥\n";
+}
+
+
+
+void run_profile_save(
+    int argc,
+    char **argv
+)
+{
+    cout << "Profile save coming soon 🔥\n";
+}
+
+
+
+void run_profile(
+    int argc,
+    char **argv
+)
+{
+    cout << "Profile viewer coming soon 🔥\n";
+}
+
+
+
+void run_profile_list()
+{
+    cout << "Profile list coming soon 🔥\n";
+}
+
+
+
+void run_auto(
+    int argc,
+    char **argv
+)
+{
+    cout << "Auto mode coming soon 🔥\n";
+}
+
+
+
+void run_mpmath(
+    int argc,
+    char **argv
+)
+{
+    cout << "mpmath mode coming soon 🔥\n";
+}
+===== ./include/pi.h =====
+// ======================================================
+// pi.h
+// Shared declarations
+// ======================================================
+
+#pragma once
+
+
+#include <gmp.h>
+#include <mpfr.h>
+
+#include <atomic>
+#include <chrono>
+#include <string>
+
+// ======================================================
+// Main program
+// ======================================================
+
+
+int run_program(
+    int argc,
+    char **argv
+);
+
+
+
+
+// ======================================================
+// Settings
+// ======================================================
+
+
+extern long DIGITS;
+
+extern int MAX_TREE_DEPTH;
+
+extern bool NO_SAVE;
+
+
+
+
+// ======================================================
+// Progress system
+// ======================================================
+
+
+extern std::atomic<long> terms_done;
+
+
+
+
+// ======================================================
+// Binary split structure
+// ======================================================
+
+
+struct BS
+{
+
+    mpz_t P;
+
+    mpz_t Q;
+
+    mpz_t T;
+
+};
+
+
+
+
+void bs_init(
+    BS &x
+);
+
+
+void bs_clear(
+    BS &x
+);
+
+
+
+
+// ======================================================
+// π calculation engine
+// ======================================================
+
+
+void calculate_chudnovsky(
+    long terms,
+    BS &result
+);
+
+
+
+void calculate_pi_mpfr(
+    BS &result,
+    mpfr_t pi,
+    long digits
+);
+
+void save_pi(
+    mpfr_t pi,
+    long digits
+);
+
+
+// ======================================================
+// Utilities
+// ======================================================
+
+
+void set_core(
+    int core
+);
+
+
+double elapsed(
+    std::chrono::high_resolution_clock::time_point start,
+    std::chrono::high_resolution_clock::time_point end
+);
+// ======================================================
+// Verify++ system
+// ======================================================
+
+void run_verify_plus(
+    int argc,
+    char **argv
+);
+
+
+bool reference_exists(
+    long digits
+);
+
+
+bool prepare_reference(
+    long digits
+);
+
+
+bool validate_reference(
+    std::string file
+);
+
+
+bool install_reference(
+    long digits
+);
+
+
+bool compare_files(
+    std::string generated,
+    std::string reference
+);
+// ======================================================
+// Benchmark system
+// ======================================================
+
+double run_single_benchmark(
+    long digits,
+    int depth
+);
+
+
+void run_benchmark(
+    long digits
+);
+
+
+void run_benchmark_plus(
+    long digits
+);
+void verify_random(
+    long digits
+);
+
+
+void verify_middle(
+    long digits
+);
+
+
+void verify_end(
+    long digits
+);
+
+
+void verify_full(
+    long digits
+);
+// ======================================================
+// Digit parser
+// ======================================================
+
+long long parse_digits(
+    const std::string &text
+);
+===== ./include/commands.h =====
+#pragma once
+
+
+int run_command(
+    int argc,
+    char **argv
+);
+===== ./include/verify.h =====
+#pragma once
+
+void run_verify_plus(
+    int argc,
+    char **argv
+);
+===== ./include/downloader.h =====
+#pragma once
+
+#include <string>
+
+
+bool download_reference(
+    long digits,
+    std::string output
+);
+===== ./main.cpp =====
+// ======================================================
+// main.cpp
+// Program entry point
+// ======================================================
+
+
+#include "pi.h"
+#include "commands.h"
+
+#include <iostream>
+
+
+using namespace std;
+
+
+
+int main(
+    int argc,
+    char **argv
+)
+{
+
+    // ==================================================
+    // Check commands first
+    //
+    // Examples:
+    // ./pi --benchmark 5000000
+    // ./pi --estimate 10000000
+    //
+    // If handled:
+    // return immediately
+    // ==================================================
+
+
+    if(run_command(argc, argv))
+    {
+        return 0;
+    }
+
+
+
+
+
+    // ==================================================
+    // Normal π calculation
+    //
+    // Example:
+    // ./pi 1000000
+    //
+    // Runs the normal calculator pipeline
+    // ==================================================
+
+
+    return run_program(
+        argc,
+        argv
+    );
+
+}
+===== ./PiCalculator/include/commands.h =====
+#pragma once
+
+
+int run_command(
+    int argc,
+    char **argv
+);
+===== ./PiCalculator/include/downloader.h =====
+#pragma once
+
+#include <string>
+
+
+bool download_reference(
+    long digits,
+    std::string output
+);
+===== ./PiCalculator/include/pi.h =====
+// ======================================================
+// pi.h
+// Shared declarations
+// ======================================================
+
+#pragma once
+
+
+#include <gmp.h>
+#include <mpfr.h>
+
+#include <atomic>
+#include <chrono>
+#include <string>
+
+// ======================================================
+// Main program
+// ======================================================
+
+
+int run_program(
+    int argc,
+    char **argv
+);
+
+
+
+
+// ======================================================
+// Settings
+// ======================================================
+
+
+extern long DIGITS;
+
+extern int MAX_TREE_DEPTH;
+
+extern bool NO_SAVE;
+
+
+
+
+// ======================================================
+// Progress system
+// ======================================================
+
+
+extern std::atomic<long> terms_done;
+
+
+
+
+// ======================================================
+// Binary split structure
+// ======================================================
+
+
+struct BS
+{
+
+    mpz_t P;
+
+    mpz_t Q;
+
+    mpz_t T;
+
+};
+
+
+
+
+void bs_init(
+    BS &x
+);
+
+
+void bs_clear(
+    BS &x
+);
+
+
+
+
+// ======================================================
+// π calculation engine
+// ======================================================
+
+
+void calculate_chudnovsky(
+    long terms,
+    BS &result
+);
+
+
+
+void calculate_pi_mpfr(
+    BS &result,
+    mpfr_t pi,
+    long digits
+);
+
+void save_pi(
+    mpfr_t pi,
+    long digits
+);
+
+
+// ======================================================
+// Utilities
+// ======================================================
+
+
+void set_core(
+    int core
+);
+
+
+double elapsed(
+    std::chrono::high_resolution_clock::time_point start,
+    std::chrono::high_resolution_clock::time_point end
+);
+// ======================================================
+// Verify++ system
+// ======================================================
+
+void run_verify_plus(
+    int argc,
+    char **argv
+);
+
+
+bool reference_exists(
+    long digits
+);
+
+
+bool prepare_reference(
+    long digits
+);
+
+
+bool validate_reference(
+    std::string file
+);
+
+
+bool install_reference(
+    long digits
+);
+
+
+bool compare_files(
+    std::string generated,
+    std::string reference
+);
+// ======================================================
+// Benchmark system
+// ======================================================
+
+double run_single_benchmark(
+    long digits,
+    int depth
+);
+
+
+void run_benchmark(
+    long digits
+);
+
+
+void run_benchmark_plus(
+    long digits
+);
+void verify_random(
+    long digits
+);
+
+
+void verify_middle(
+    long digits
+);
+
+
+void verify_end(
+    long digits
+);
+
+
+void verify_full(
+    long digits
+);
+===== ./PiCalculator/include/verify.h =====
+#pragma once
+
+void run_verify_plus(
+    int argc,
+    char **argv
+);
+===== ./PiCalculator/main.cpp =====
+// ======================================================
+// main.cpp
+// Program entry point
+// ======================================================
+
+
+#include "pi.h"
+#include "commands.h"
+
+#include <iostream>
+
+
+using namespace std;
+
+
+
+int main(
+    int argc,
+    char **argv
+)
+{
+
+    // ==================================================
+    // Check commands first
+    //
+    // Examples:
+    // ./pi --benchmark 5000000
+    // ./pi --estimate 10000000
+    //
+    // If handled:
+    // return immediately
+    // ==================================================
+
+
+    if(run_command(argc, argv))
+    {
+        return 0;
+    }
+
+
+
+
+
+    // ==================================================
+    // Normal π calculation
+    //
+    // Example:
+    // ./pi 1000000
+    //
+    // Runs the normal calculator pipeline
+    // ==================================================
+
+
+    return run_program(
+        argc,
+        argv
+    );
+
+}
+===== ./PiCalculator/src/benchmark.cpp =====
+// ======================================================
+// benchmark.cpp
+// --benchmark system
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Run one benchmark
+// ======================================================
+
+
+double run_single_benchmark(
+    long digits,
+    int depth
+)
+{
+
+    DIGITS =
+        digits;
+
+
+    MAX_TREE_DEPTH =
+        depth;
+
+
+
+    BS result;
+
+    bs_init(
+        result
+    );
+
+
+
+    long terms =
+        DIGITS / 14 + 2;
+
+
+
+    auto start =
+        chrono::high_resolution_clock::now();
+
+
+
+    calculate_chudnovsky(
+        terms,
+        result
+    );
+
+
+
+    auto end =
+        chrono::high_resolution_clock::now();
+
+
+
+    double time =
+        elapsed(
+            start,
+            end
+        );
+
+
+
+    bs_clear(
+        result
+    );
+
+
+
+    return time;
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// Median helper
+// ======================================================
+
+
+double median(
+    vector<double> values
+)
+{
+
+    sort(
+        values.begin(),
+        values.end()
+    );
+
+
+    return values[
+        values.size() / 2
+    ];
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// Main benchmark command
+// ======================================================
+
+
+void run_benchmark(
+    long digits
+)
+{
+
+    vector<int> depths =
+    {
+        0,
+        1,
+        2,
+        3,
+        4
+    };
+
+
+
+    double best_time =
+        999999;
+
+
+    int best_depth =
+        0;
+
+
+
+
+    cout
+    << "Starting benchmark 🔥\n\n";
+
+
+
+
+
+    for(int depth : depths)
+    {
+
+        cout
+        << "Testing depth "
+        << depth
+        << "...\n\n";
+
+
+
+        vector<double> results;
+
+
+
+
+
+        for(int run = 1; run <= 3; run++)
+        {
+
+            double time =
+                run_single_benchmark(
+                    digits,
+                    depth
+                );
+
+
+
+            results.push_back(
+                time
+            );
+
+
+
+            cout
+            << "Run "
+            << run
+            << ": "
+            << time
+            << "s\n";
+
+        }
+
+
+
+
+
+        double med =
+            median(
+                results
+            );
+
+
+
+        cout
+        << "Median: "
+        << med
+        << "s\n\n";
+
+
+
+
+
+
+        if(med < best_time)
+        {
+
+            best_time =
+                med;
+
+
+            best_depth =
+                depth;
+
+        }
+
+    }
+
+
+
+
+
+
+
+    cout
+    << "====================\n";
+
+
+    cout
+    << "Best depth: "
+    << best_depth
+    << " 🔥\n";
+
+
+    cout
+    << "Median time: "
+    << best_time
+    << "s\n";
+
+
+    cout
+    << "====================\n";
+
+}
+===== ./PiCalculator/src/benchmark_plus.cpp =====
+// ======================================================
+// benchmark_plus.cpp
+// --benchmark++ extension
+// Extra benchmark analysis
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Benchmark++
+//
+// Adds:
+// - CPU warm-up
+// - Normal benchmark reuse
+// - Extra analysis output
+//
+// ======================================================
+
+
+void run_benchmark_plus(
+    long digits
+)
+{
+
+    cout
+    << "Starting benchmark++ 🔥\n\n";
+
+
+
+    // ==================================================
+    // Warm-up
+    //
+    // Purpose:
+    // - Wake CPU
+    // - Fill caches
+    // - Reduce first-run spikes
+    //
+    // Result is ignored
+    // ==================================================
+
+
+    cout
+    << "Warm-up enabled ✅\n";
+
+
+    cout
+    << "Performing warm-up...\n";
+
+
+
+    run_single_benchmark(
+        digits,
+        1
+    );
+
+
+
+    cout
+    << "Warm-up complete ✅\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // Run normal benchmark
+    //
+    // Uses benchmark.cpp
+    // ==================================================
+
+
+    cout
+    << "Starting benchmark 🔥\n\n";
+
+
+    run_benchmark(
+        digits
+    );
+
+
+
+
+
+
+
+    // ==================================================
+    // Analysis report
+    // ==================================================
+
+
+    cout
+    << "\nBenchmark++ analysis 🔥\n";
+
+
+    cout
+    << "Warm-up: enabled\n";
+
+
+    cout
+    << "Median timing: enabled\n";
+
+
+    cout
+    << "Outlier protection: enabled\n";
+
+
+    cout
+    << "Depth comparison: enabled\n";
+
+
+
+
+
+    cout
+    << "\nBenchmark++ complete 🔥\n";
+
+}
+===== ./PiCalculator/src/calculator.cpp =====
+// ======================================================
+// calculator.cpp
+// Chudnovsky π engine
+// ======================================================
+
+#include "pi.h"
+
+#include <gmp.h>
+#include <mpfr.h>
+
+#include <thread>
+#include <atomic>
+
+using namespace std;
+
+
+// Chudnovsky constants
+
+const long A = 13591409;
+const long B = 545140134;
+
+
+// Progress counter
+extern atomic<long> terms_done;
+
+
+// Tree settings
+extern int MAX_TREE_DEPTH;
+
+
+// ======================================================
+// Binary split structure
+// ======================================================
+
+void bs_init(
+    BS &x
+)
+{
+    mpz_init(x.P);
+    mpz_init(x.Q);
+    mpz_init(x.T);
+}
+
+
+
+void bs_clear(
+    BS &x
+)
+{
+    mpz_clear(x.P);
+    mpz_clear(x.Q);
+    mpz_clear(x.T);
+}
+// ======================================================
+// Binary split engine
+// Chudnovsky algorithm
+// ======================================================
+
+
+void binary_split(
+    long a,
+    long b,
+    BS &r,
+    int depth
+)
+{
+
+    // ------------------------------
+    // Leaf calculation
+    // ------------------------------
+
+    if(b - a == 1)
+    {
+
+        // First term
+
+        if(a == 0)
+        {
+
+            mpz_set_ui(
+                r.P,
+                1
+            );
+
+            mpz_set_ui(
+                r.Q,
+                1
+            );
+
+            mpz_set_si(
+                r.T,
+                A
+            );
+
+        }
+
+        else
+        {
+
+            // P = (6a-5)(2a-1)(6a-1)
+
+            mpz_set_si(
+                r.P,
+                6*a - 5
+            );
+
+
+            mpz_mul_si(
+                r.P,
+                r.P,
+                2*a - 1
+            );
+
+
+            mpz_mul_si(
+                r.P,
+                r.P,
+                6*a - 1
+            );
+
+
+
+            // Q = 10939058860032000*a³
+
+            mpz_set_ui(
+                r.Q,
+                10939058860032000ULL
+            );
+
+
+            mpz_mul_ui(
+                r.Q,
+                r.Q,
+                a
+            );
+
+
+            mpz_mul_ui(
+                r.Q,
+                r.Q,
+                a
+            );
+
+
+            mpz_mul_ui(
+                r.Q,
+                r.Q,
+                a
+            );
+
+
+
+            // T = P*(A+B*a)
+
+            mpz_set_si(
+                r.T,
+                A + B*a
+            );
+
+
+            mpz_mul(
+                r.T,
+                r.T,
+                r.P
+            );
+
+
+            // Alternating signs
+
+            if(a % 2)
+            {
+
+                mpz_neg(
+                    r.T,
+                    r.T
+                );
+
+            }
+
+        }
+
+
+        terms_done++;
+
+        return;
+
+    }
+
+
+
+    // ------------------------------
+    // Split recursively
+    // ------------------------------
+
+    long mid =
+        (a + b) / 2;
+
+
+
+    BS left;
+    BS right;
+
+
+    bs_init(left);
+    bs_init(right);
+
+
+
+    // ------------------------------
+    // Parallel branch
+    // ------------------------------
+
+    if(
+        depth < MAX_TREE_DEPTH
+    )
+    {
+
+        thread worker(
+            [&]()
+            {
+
+                set_core(7);
+
+
+                binary_split(
+                    a,
+                    mid,
+                    left,
+                    depth + 1
+                );
+
+            }
+        );
+
+
+
+        set_core(6);
+
+
+        binary_split(
+            mid,
+            b,
+            right,
+            depth + 1
+        );
+
+
+        worker.join();
+
+    }
+
+    else
+    {
+
+        binary_split(
+            a,
+            mid,
+            left,
+            depth + 1
+        );
+
+
+        binary_split(
+            mid,
+            b,
+            right,
+            depth + 1
+        );
+
+    }
+
+
+
+    // ------------------------------
+    // Combine nodes
+    //
+    // P = P1*P2
+    // Q = Q1*Q2
+    // T = T1*Q2 + P1*T2
+    // ------------------------------
+
+
+    mpz_mul(
+        r.P,
+        left.P,
+        right.P
+    );
+
+
+    mpz_mul(
+        r.Q,
+        left.Q,
+        right.Q
+    );
+
+
+
+    mpz_t temp;
+
+    mpz_init(temp);
+
+
+
+    mpz_mul(
+        r.T,
+        left.T,
+        right.Q
+    );
+
+
+    mpz_mul(
+        temp,
+        left.P,
+        right.T
+    );
+
+
+    mpz_add(
+        r.T,
+        r.T,
+        temp
+    );
+
+
+
+    mpz_clear(temp);
+
+
+
+    bs_clear(left);
+    bs_clear(right);
+
+}
+
+
+
+
+
+// ======================================================
+// Chudnovsky calculation wrapper
+// ======================================================
+
+
+void calculate_chudnovsky(
+    long terms,
+    BS &result
+)
+{
+
+    terms_done = 0;
+
+
+    set_core(6);
+
+
+    binary_split(
+        0,
+        terms,
+        result,
+        0
+    );
+
+}
+===== ./PiCalculator/src/commands.cpp =====
+// ======================================================
+// commands.cpp
+// Command router for all -- functions
+// ======================================================
+
+#include "pi.h"
+#include "commands.h"
+
+#include <iostream>
+#include <string>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Command declarations
+// Implemented in other .cpp files
+// ======================================================
+
+
+void run_benchmark(
+    long digits
+);
+
+
+void run_benchmark_plus(
+    long digits
+);
+
+
+void run_estimate(
+    int argc,
+    char **argv
+);
+
+
+void run_no_save(
+    int argc,
+    char **argv
+);
+
+
+void run_speedtest();
+
+
+void run_stress(
+    int argc,
+    char **argv
+);
+
+
+void run_memory();
+
+
+void run_verify_plus(
+    int argc,
+    char **argv
+);
+
+
+void run_profile_save(
+    int argc,
+    char **argv
+);
+
+
+void run_profile(
+    int argc,
+    char **argv
+);
+
+
+void run_profile_list();
+
+
+void run_auto(
+    int argc,
+    char **argv
+);
+
+
+void run_mpmath(
+    int argc,
+    char **argv
+);
+
+
+
+// ======================================================
+// Main command router
+//
+// Returns:
+// 1  = command handled
+// 0  = normal calculation
+// ======================================================
+
+
+int run_command(
+    int argc,
+    char **argv
+)
+{
+
+    if(argc < 2)
+        return 0;
+
+
+
+    string command =
+        argv[1];
+
+
+
+
+    // --------------------------------------------------
+    // Benchmark
+    // --------------------------------------------------
+
+
+    if(command == "--benchmark")
+    {
+
+        if(argc < 3)
+        {
+
+            cout
+            << "Usage: ./pi --benchmark digits\n";
+
+            return 1;
+
+        }
+
+
+        run_benchmark(
+            atol(argv[2])
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--benchmark++")
+    {
+
+        if(argc < 3)
+        {
+
+            cout
+            << "Usage: ./pi --benchmark++ digits\n";
+
+            return 1;
+
+        }
+
+
+        run_benchmark_plus(
+            atol(argv[2])
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Calculation options
+    // --------------------------------------------------
+
+
+    if(command == "--estimate")
+    {
+
+        run_estimate(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--no-save")
+    {
+
+        run_no_save(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // System tools
+    // --------------------------------------------------
+
+
+    if(command == "--speedtest")
+    {
+
+        run_speedtest();
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--memory")
+    {
+
+        run_memory();
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--stress")
+    {
+
+        run_stress(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Verification
+    // --------------------------------------------------
+
+
+    if(command == "--verify++")
+    {
+
+        run_verify_plus(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Profiles
+    // --------------------------------------------------
+
+
+    if(command == "--profile-save")
+    {
+
+        run_profile_save(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--profile")
+    {
+
+        run_profile(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    if(command == "--profile-list")
+    {
+
+        run_profile_list();
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Automation
+    // --------------------------------------------------
+
+
+    if(command == "--auto")
+    {
+
+        run_auto(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // --------------------------------------------------
+    // Alternative calculators
+    // --------------------------------------------------
+
+
+    if(command == "--mpmath")
+    {
+
+        run_mpmath(
+            argc,
+            argv
+        );
+
+
+        return 1;
+
+    }
+
+
+
+
+
+    // Unknown command
+    // Let normal parser handle it
+    // --------------------------------------------------
+
+
+    return 0;
+
+}
+===== ./PiCalculator/src/commands/placeholders.cpp =====
+// ======================================================
+// Placeholder commands
+// ======================================================
+
+#include "pi.h"
+
+#include <iostream>
+
+
+using namespace std;
+
+
+
+void run_speedtest()
+{
+    cout << "Speedtest coming soon 🔥\n";
+}
+
+
+
+void run_memory()
+{
+    cout << "Memory monitor coming soon 🔥\n";
+}
+
+
+
+void run_stress(
+    int argc,
+    char **argv
+)
+{
+    cout << "Stress test coming soon 🔥\n";
+}
+
+
+
+void run_profile_save(
+    int argc,
+    char **argv
+)
+{
+    cout << "Profile save coming soon 🔥\n";
+}
+
+
+
+void run_profile(
+    int argc,
+    char **argv
+)
+{
+    cout << "Profile viewer coming soon 🔥\n";
+}
+
+
+
+void run_profile_list()
+{
+    cout << "Profile list coming soon 🔥\n";
+}
+
+
+
+void run_auto(
+    int argc,
+    char **argv
+)
+{
+    cout << "Auto mode coming soon 🔥\n";
+}
+
+
+
+void run_mpmath(
+    int argc,
+    char **argv
+)
+{
+    cout << "mpmath mode coming soon 🔥\n";
+}
+===== ./PiCalculator/src/estimate.cpp =====
+// ======================================================
+// estimate.cpp
+// --estimate system
+// Device + π calculation estimator
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <cmath>
+#include <sys/sysinfo.h>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Convert bytes into readable format
+// ======================================================
+
+
+string format_bytes(
+    unsigned long long bytes
+)
+{
+
+    const char *units[] =
+    {
+        "B",
+        "KB",
+        "MB",
+        "GB",
+        "TB",
+        "PB"
+    };
+
+
+
+    double size =
+        bytes;
+
+
+    int unit = 0;
+
+
+
+    while(
+        size >= 1024 &&
+        unit < 5
+    )
+    {
+
+        size /= 1024;
+        unit++;
+
+    }
+
+
+
+    stringstream ss;
+
+
+    ss
+    << fixed
+    << setprecision(2)
+    << size
+    << " "
+    << units[unit];
+
+
+    return ss.str();
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// Detect RAM
+// ======================================================
+
+
+unsigned long long get_ram()
+{
+
+    struct sysinfo info;
+
+
+
+    if(sysinfo(&info) == 0)
+    {
+
+        return
+            (unsigned long long)
+            info.totalram *
+            info.mem_unit;
+
+    }
+
+
+
+    return 0;
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// Time estimation
+//
+// Based on benchmark data:
+//
+// 5M digits ≈ 4.1 seconds
+//
+// Future:
+// Replace with benchmark database
+//
+// ======================================================
+
+
+double estimate_time(
+    long digits
+)
+{
+
+    double base_digits =
+        5000000.0;
+
+
+    double base_time =
+        4.1;
+
+
+
+    double ratio =
+        digits /
+        base_digits;
+
+
+
+    return
+        base_time *
+        pow(
+            ratio,
+            1.10
+        );
+
+}
+
+
+
+
+
+
+
+// ======================================================
+// --estimate command
+// ======================================================
+
+
+void run_estimate(
+    int argc,
+    char **argv
+)
+{
+
+    if(argc < 3)
+    {
+
+        cout
+        << "Usage:\n";
+
+
+        cout
+        << "./pi --estimate digits\n";
+
+
+        return;
+
+    }
+
+
+
+
+
+    long digits =
+        atol(
+            argv[2]
+        );
+
+
+
+
+
+
+
+    cout
+    << "π Calculation Estimate 🔥\n\n";
+
+
+
+    cout
+    << "Target digits: "
+    << digits
+    << "\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // Storage
+    // ==================================================
+
+
+    unsigned long long output_size =
+        digits;
+
+
+
+    cout
+    << "Storage needed:\n";
+
+
+    cout
+    << "π text file: "
+    << format_bytes(
+        output_size
+    )
+    << "\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // RAM
+    // ==================================================
+
+
+    unsigned long long ram =
+        get_ram();
+
+
+
+    cout
+    << "Device RAM:\n";
+
+
+
+    if(ram)
+    {
+
+        cout
+        << format_bytes(
+            ram
+        )
+        << "\n";
+
+    }
+    else
+    {
+
+        cout
+        << "Unknown\n";
+
+    }
+
+
+
+    cout
+    << "\n";
+
+
+
+
+
+
+    unsigned long long estimated_ram =
+        digits * 2;
+
+
+
+    cout
+    << "Estimated calculation RAM:\n";
+
+
+    cout
+    << format_bytes(
+        estimated_ram
+    )
+    << "\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // Time
+    // ==================================================
+
+
+    double seconds =
+        estimate_time(
+            digits
+        );
+
+
+
+    cout
+    << "Estimated calculation time:\n";
+
+
+
+    if(seconds < 60)
+    {
+
+        cout
+        << seconds
+        << " seconds\n";
+
+    }
+    else if(seconds < 3600)
+    {
+
+        cout
+        << seconds / 60
+        << " minutes\n";
+
+    }
+    else if(seconds < 86400)
+    {
+
+        cout
+        << seconds / 3600
+        << " hours\n";
+
+    }
+    else
+    {
+
+        cout
+        << seconds / 86400
+        << " days\n";
+
+    }
+
+
+
+
+
+
+
+    // ==================================================
+    // Warnings
+    // ==================================================
+
+
+    cout
+    << "\n";
+
+
+
+    if(
+        ram &&
+        estimated_ram > ram
+    )
+    {
+
+        cout
+        << "⚠️ Warning: Estimated RAM exceeds device RAM\n";
+
+    }
+
+
+
+
+
+    if(
+        output_size > 100000000000ULL
+    )
+    {
+
+        cout
+        << "⚠️ Warning: Output file is extremely large\n";
+
+    }
+
+
+
+
+
+
+    cout
+    << "\n====================\n";
+
+
+    cout
+    << "Estimate complete 🔥\n";
+
+}
+===== ./PiCalculator/src/mpfr.cpp =====
+// ======================================================
+// mpfr.cpp
+// MPFR π conversion
+// ======================================================
+
+
+#include "pi.h"
+
+#include <mpfr.h>
+
+
+
+
+// ======================================================
+// Convert GMP binary split result into π
+// ======================================================
+
+
+void calculate_pi_mpfr(
+    BS &result,
+    mpfr_t pi,
+    long digits
+)
+{
+
+    // MPFR precision
+    // ~3.322 bits per decimal digit
+
+    mpfr_prec_t precision =
+        (digits * 3322) / 1000 + 64;
+
+
+
+    mpfr_set_prec(
+        pi,
+        precision
+    );
+
+
+
+    mpfr_t sqrtC;
+    mpfr_t q;
+    mpfr_t t;
+
+
+
+    mpfr_init2(
+        sqrtC,
+        precision
+    );
+
+
+    mpfr_init2(
+        q,
+        precision
+    );
+
+
+    mpfr_init2(
+        t,
+        precision
+    );
+
+
+
+
+    // 426880 * sqrt(10005)
+
+    mpfr_sqrt_ui(
+        sqrtC,
+        10005,
+        MPFR_RNDN
+    );
+
+
+    mpfr_mul_ui(
+        sqrtC,
+        sqrtC,
+        426880,
+        MPFR_RNDN
+    );
+
+
+
+
+    // GMP -> MPFR conversion
+
+    mpfr_set_z(
+        q,
+        result.Q,
+        MPFR_RNDN
+    );
+
+
+    mpfr_set_z(
+        t,
+        result.T,
+        MPFR_RNDN
+    );
+
+
+
+
+    // π = 426880*sqrt(10005)*Q/T
+
+    mpfr_div(
+        pi,
+        q,
+        t,
+        MPFR_RNDN
+    );
+
+
+    mpfr_mul(
+        pi,
+        pi,
+        sqrtC,
+        MPFR_RNDN
+    );
+
+
+
+
+    mpfr_clear(
+        sqrtC
+    );
+
+
+    mpfr_clear(
+        q
+    );
+
+
+    mpfr_clear(
+        t
+    );
+
+}
+===== ./PiCalculator/src/no_save.cpp =====
+// ======================================================
+// no_save.cpp
+// --no-save command
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <cstdlib>
+
+
+using namespace std;
+
+
+
+// ======================================================
+// Disable saving output
+//
+// Usage:
+// ./pi --no-save digits [depth]
+//
+// ======================================================
+
+
+void run_no_save(
+    int argc,
+    char **argv
+)
+{
+
+    NO_SAVE = true;
+
+
+
+    if(argc < 3)
+    {
+
+        cout
+        << "Usage: ./pi --no-save digits [depth]\n";
+
+        return;
+
+    }
+
+
+
+
+
+
+    // Move digit argument
+
+    DIGITS =
+        atol(
+            argv[2]
+        );
+
+
+
+
+
+
+    // Optional tree depth
+
+    if(argc > 3)
+    {
+
+        MAX_TREE_DEPTH =
+            atoi(
+                argv[3]
+            );
+
+    }
+
+
+
+}
+===== ./PiCalculator/src/output.cpp =====
+// ======================================================
+// output.cpp
+// π file writer
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <cstdio>
+#include <string>
+
+
+using namespace std;
+
+
+
+void save_pi(
+    mpfr_t pi,
+    long digits
+)
+{
+
+    string filename =
+        "pi_" +
+        to_string(digits) +
+        ".txt";
+
+
+
+    cout
+    << "Saving file...\n";
+
+
+
+    auto start =
+        chrono::high_resolution_clock::now();
+
+
+
+
+    FILE *file =
+        fopen(
+            filename.c_str(),
+            "w"
+        );
+
+
+
+    if(!file)
+    {
+
+        cout
+        << "File open failed ❌\n";
+
+        return;
+
+    }
+
+
+
+
+    static char buffer[
+        16 * 1024 * 1024
+    ];
+
+
+
+    setvbuf(
+        file,
+        buffer,
+        _IOFBF,
+        sizeof(buffer)
+    );
+
+
+
+
+    // Write directly from MPFR
+
+    mpfr_out_str(
+        file,
+        10,
+        digits + 1,
+        pi,
+        MPFR_RNDN
+    );
+
+
+
+    fclose(file);
+
+
+
+
+    auto end =
+        chrono::high_resolution_clock::now();
+
+
+
+    cout
+    << "Save time: "
+    << elapsed(
+        start,
+        end
+    )
+    << "s\n\n";
+
+}
+===== ./PiCalculator/src/program.cpp =====
+// ======================================================
+// program.cpp
+// Normal π calculation pipeline
+// ======================================================
+
+#include "pi.h"
+
+#include <iostream>
+#include <chrono>
+
+
+using namespace std;
+
+
+
+int run_program(
+    int argc,
+    char **argv
+)
+{
+
+    auto total_start =
+        chrono::high_resolution_clock::now();
+
+
+
+    if(argc < 2)
+    {
+
+        cout
+        << "Usage: ./pi digits [depth]\n";
+
+        return 1;
+
+    }
+
+
+
+
+
+    // ==================================================
+    // Parse arguments
+    // ==================================================
+
+
+    DIGITS =
+        atol(argv[1]);
+
+
+
+    if(argc > 2)
+    {
+
+        MAX_TREE_DEPTH =
+            atoi(argv[2]);
+
+    }
+
+
+
+    if(MAX_TREE_DEPTH > 8)
+    {
+
+        cout
+        << "Tree depth limited to 8\n";
+
+
+        MAX_TREE_DEPTH = 8;
+
+    }
+
+
+
+
+
+
+    long terms =
+        DIGITS / 14 + 2;
+
+
+
+
+
+
+    cout
+    << "Starting GMP+MPFR Optimized Chudnovsky π 🔥\n\n";
+
+
+    cout
+    << "Digits: "
+    << DIGITS
+    << "\n";
+
+
+    cout
+    << "Tree depth: "
+    << MAX_TREE_DEPTH
+    << "\n";
+
+
+    cout
+    << "Terms needed: "
+    << terms
+    << "\n\n";
+
+
+
+
+
+
+    // ==================================================
+    // Binary split
+    // ==================================================
+
+
+    BS result;
+
+    bs_init(
+        result
+    );
+
+
+
+    cout
+    << "Calculating π:\n";
+
+
+
+    auto calc_start =
+        chrono::high_resolution_clock::now();
+
+
+
+    calculate_chudnovsky(
+        terms,
+        result
+    );
+
+
+
+    auto calc_end =
+        chrono::high_resolution_clock::now();
+
+
+
+    cout
+    << "Calculation time: "
+    << elapsed(
+        calc_start,
+        calc_end
+    )
+    << "s\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // MPFR conversion
+    // ==================================================
+
+
+    cout
+    << "Calculating π with MPFR...\n";
+
+
+
+    mpfr_t pi;
+
+    mpfr_init(
+        pi
+    );
+
+
+
+    auto mpfr_start =
+        chrono::high_resolution_clock::now();
+
+
+
+    calculate_pi_mpfr(
+        result,
+        pi,
+        DIGITS
+    );
+
+
+
+    auto mpfr_end =
+        chrono::high_resolution_clock::now();
+
+
+
+    cout
+    << "MPFR time: "
+    << elapsed(
+        mpfr_start,
+        mpfr_end
+    )
+    << "s\n\n";
+
+
+
+
+
+
+
+    // ==================================================
+    // Save output
+    // ==================================================
+
+
+    if(NO_SAVE)
+    {
+
+        cout
+        << "Saving disabled ⏭️\n";
+
+    }
+    else
+    {
+
+        save_pi(
+            pi,
+            DIGITS
+        );
+
+    }
+
+
+
+
+
+
+
+    // ==================================================
+    // Cleanup
+    // ==================================================
+
+
+    mpfr_clear(
+        pi
+    );
+
+
+    bs_clear(
+        result
+    );
+
+
+
+
+
+
+
+    auto total_end =
+        chrono::high_resolution_clock::now();
+
+
+
+
+
+    cout
+    << "\n====================\n";
+
+
+    cout
+    << "Finished 🔥\n";
+
+
+    cout
+    << "Total time: "
+    << elapsed(
+        total_start,
+        total_end
+    )
+    << "s\n";
+
+
+
+    return 0;
+
+}
+===== ./PiCalculator/src/utils.cpp =====
+// ======================================================
+// utils.cpp
+// Shared utilities + global settings
+// ======================================================
+
+
+#include "pi.h"
+
+#include <iostream>
+#include <iomanip>
+#include <sched.h>
+
+using namespace std;
+
+
+
+// ======================================================
+// Global settings
+// ======================================================
+
+
+long DIGITS = 1000000;
+
+
+int MAX_TREE_DEPTH = 2;
+
+
+bool NO_SAVE = false;
+
+
+
+// ======================================================
+// Progress system data
+// ======================================================
+
+
+atomic<long> terms_done(0);
+
+
+
+
+// ======================================================
+// CPU core pinning
+// ======================================================
+
+
+void set_core(
+    int core
+)
+{
+
+    cpu_set_t set;
+
+
+    CPU_ZERO(
+        &set
+    );
+
+
+    CPU_SET(
+        core,
+        &set
+    );
+
+
+    sched_setaffinity(
+        0,
+        sizeof(set),
+        &set
+    );
+
+}
+
+
+
+
+
+// ======================================================
+// Timing helper
+// ======================================================
+
+
+double elapsed(
+    chrono::high_resolution_clock::time_point start,
+    chrono::high_resolution_clock::time_point end
+)
+{
+
+    return chrono::duration<double>(
+        end - start
+    ).count();
+
+}
+===== ./PiCalculator/src/verify.cpp =====
+// ======================================================
+// verify.cpp
+// Chunk 6.5
+// Verify++ main system
+// ======================================================
+
+#include "verify.h"
+
+#include <cstdlib>
+#include <iostream>
+#include <fstream>
+#include <string>
+
+
+bool reference_exists(
+    long digits
+);
+
+bool prepare_reference(
+    long digits
+);
+
+void verify_full(
+    long digits
+);
+
+void verify_random(
+    long digits
+);
+
+void verify_middle(
+    long digits
+);
+
+void verify_end(
+    long digits
+);
+
+
+
+using namespace std;
+
+
+
+void run_verify_plus(
+    int argc,
+    char **argv
+)
+{
+
+    if(argc < 3)
+    {
+        cout
+        << "Usage:\n"
+        << "./pi --verify++ digits[-random|-middle|-end]\n";
+
+        return;
+    }
+
+
+
+    string arg =
+        argv[2];
+
+
+
+    string mode =
+        "full";
+
+
+
+    if(arg.find("-random") != string::npos)
+    {
+        mode = "random";
+        arg =
+            arg.substr(
+                0,
+                arg.find("-random")
+            );
+    }
+
+    else if(arg.find("-middle") != string::npos)
+    {
+        mode = "middle";
+        arg =
+            arg.substr(
+                0,
+                arg.find("-middle")
+            );
+    }
+
+    else if(arg.find("-end") != string::npos)
+    {
+        mode = "end";
+        arg =
+            arg.substr(
+                0,
+                arg.find("-end")
+            );
+    }
+
+
+
+    long digits =
+        atol(
+            arg.c_str()
+        );
+
+
+
+    cout
+    << "Verify++ 🔥\n\n";
+
+
+
+    if(!prepare_reference(digits))
+    {
+        cout
+        << "Cannot continue ❌\n";
+
+        return;
+    }
+
+
+
+    if(mode == "random")
+        verify_random(digits);
+
+    else if(mode == "middle")
+        verify_middle(digits);
+
+    else if(mode == "end")
+        verify_end(digits);
+
+    else
+        verify_full(digits);
+
+
+
+    cout
+    << "\nVerify++ complete 🔥\n";
+
+}
+===== ./PiCalculator/src/verify/comparator.cpp =====
+// ======================================================
+// comparator.cpp
+// Verify++ comparison modes
+// ======================================================
+
+#include <iostream>
+#include <fstream>
+#include <string>
+
+
+using namespace std;
+
+
+
+bool compare_files(
+    string generated,
+    string reference
+)
+{
+
+    ifstream a(generated);
+    ifstream b(reference);
+
+
+    if(!a || !b)
+        return false;
+
+
+    char x;
+    char y;
+
+
+    long position = 0;
+
+
+
+    while(
+        a.get(x) &&
+        b.get(y)
+    )
+    {
+
+        if(x != y)
+        {
+
+            cout
+            << "\nMismatch at digit "
+            << position
+            << " ❌\n";
+
+            cout
+            << "Generated: "
+            << x
+            << "\n";
+
+            cout
+            << "Reference: "
+            << y
+            << "\n";
+
+
+            return false;
+
+        }
+
+
+        position++;
+
+
+        if(position % 10000 == 0)
+        {
+            cout
+            << "\rChecked "
+            << position
+            << " digits"
+            << flush;
+        }
+
+    }
+
+
+    cout << "\n";
+
+    return true;
+
+}
+
+
+
+
+
+void verify_full(
+    long digits
+)
+{
+
+    string generated =
+        "pi_" +
+        to_string(digits) +
+        ".txt";
+
+
+    string reference =
+        "reference/pi_" +
+        to_string(digits) +
+        ".txt";
+
+
+
+    cout
+    << "Full verification 🔥\n";
+
+
+
+    if(compare_files(
+        generated,
+        reference
+    ))
+    {
+        cout
+        << "All digits match ✅\n";
+    }
+    else
+    {
+        cout
+        << "Verification failed ❌\n";
+    }
+
+}
+
+
+
+
+
+void verify_random(
+    long digits
+)
+{
+
+    cout
+    << "Random digit verification 🔥\n";
+
+    cout
+    << "Coming soon (random mode)\n";
+
+}
+
+
+
+
+
+void verify_middle(
+    long digits
+)
+{
+
+    cout
+    << "Middle digit verification 🔥\n";
+
+    cout
+    << "Coming soon (middle mode)\n";
+
+}
+
+
+
+
+
+void verify_end(
+    long digits
+)
+{
+
+    cout
+    << "End digit verification 🔥\n";
+
+    cout
+    << "Coming soon (end mode)\n";
+
+}
+===== ./PiCalculator/src/verify/downloader.cpp =====
+// ======================================================
+// downloader.cpp
+// ======================================================
+
+#include "downloader.h"
+
+#include <iostream>
+#include <cstdlib>
+
+
+using namespace std;
+
+
+
+bool download_reference(
+    long digits,
+    string output
+)
+{
+
+    string url =
+        "https://files.pilookup.com/pi/" +
+        to_string(digits) +
+        ".txt";
+
+
+
+    cout
+    << "Downloading...\n";
+
+
+
+    string command =
+        "curl -L \"" +
+        url +
+        "\" -o \"" +
+        output +
+        "\"";
+
+
+
+    int result =
+        system(
+            command.c_str()
+        );
+
+
+
+    return result == 0;
+
+}
+===== ./PiCalculator/src/verify/reference.cpp =====
+// ======================================================
+// reference.cpp
+// Reference file manager
+// ======================================================
+
+#include "downloader.h"
+
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+
+
+using namespace std;
+
+namespace fs = filesystem;
+
+
+
+bool reference_exists(long digits)
+{
+    return fs::exists(
+        "reference/pi_" +
+        to_string(digits) +
+        ".txt"
+    );
+}
+
+
+
+bool validate_reference(
+    string file
+)
+{
+
+    ifstream input(file);
+
+
+
+    if(!input)
+        return false;
+
+
+
+    char a,b,c,d;
+
+
+
+    input >> a >> b >> c >> d;
+
+
+
+    // Should start with 3.14
+
+    return
+        a == '3' &&
+        b == '.' &&
+        c == '1' &&
+        d == '4';
+
+}
+
+
+
+
+
+bool install_reference(
+    long digits
+)
+{
+
+    string temp =
+        "temp/downloads/pi_" +
+        to_string(digits) +
+        ".download";
+
+
+    string final =
+        "reference/pi_" +
+        to_string(digits) +
+        ".txt";
+
+
+
+    if(!validate_reference(temp))
+    {
+
+        cout
+        << "Downloaded file invalid ❌\n";
+
+        return false;
+
+    }
+
+
+
+    fs::rename(
+        temp,
+        final
+    );
+
+
+
+    cout
+    << "Reference installed ✅\n";
+
+
+    return true;
+
+}
+
+
+
+
+
+bool prepare_reference(
+    long digits
+)
+{
+
+    if(reference_exists(digits))
+    {
+
+        cout
+        << "Reference found ✅\n";
+
+        return true;
+
+    }
+
+
+
+    cout
+    << "Reference file missing ❌\n";
+
+
+
+    cout
+    << "Required storage: "
+    << digits / 1024.0
+    << " KB\n\n";
+
+
+
+    cout
+    << "Download from piLookup.com? [y/n]: ";
+
+
+
+    char answer;
+
+    cin >> answer;
+
+
+
+    if(answer != 'y')
+        return false;
+
+
+
+
+    string temp =
+        "temp/downloads/pi_" +
+        to_string(digits) +
+        ".download";
+
+
+
+    if(!download_reference(
+        digits,
+        temp
+    ))
+    {
+
+        cout
+        << "Download failed ❌\n";
+
+        return false;
+
+    }
+
+
+
+    return install_reference(digits);
+
+}

@@ -195,7 +195,7 @@ void run_estimate(
 
 
     long digits =
-        atol(
+        parse_digits(
             argv[2]
         );
 
