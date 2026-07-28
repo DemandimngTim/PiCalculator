@@ -5,6 +5,7 @@
 
 #include "pi.h"
 #include "commands.h"
+#include "profiles/profiles.h"
 
 #include <iostream>
 #include <string>
@@ -18,6 +19,11 @@ using namespace std;
 // Command declarations
 // Implemented in other .cpp files
 // ======================================================
+
+void run_help(
+    int argc,
+    char **argv
+);
 
 void show_version();
 
@@ -115,7 +121,15 @@ int run_command(
 
     string command =
         argv[1];
+if(command == "--help")
+{
+    run_help(
+        argc,
+        argv
+    );
 
+    return 1;
+}
 
 
 
@@ -265,7 +279,7 @@ int run_command(
     if(string(argv[1]) == "--version")
 {
     show_version();
-    return 0;
+    return 1;
 }
 
 
@@ -295,59 +309,13 @@ int run_command(
 
     }
 
+// profile
 
-
-
-
-    // --------------------------------------------------
-    // Profiles
-    // --------------------------------------------------
-
-
-    if(command == "--profile-save")
-    {
-
-        run_profile_save(
-            argc,
-            argv
-        );
-
-
-        return 1;
-
-    }
-
-
-
-
-
-    if(command == "--profile")
-    {
-
-        run_profile(
-            argc,
-            argv
-        );
-
-
-        return 1;
-
-    }
-
-
-
-
-
-    if(command == "--profile-list")
-    {
-
-        run_profile_list();
-
-        return 1;
-
-    }
-
-
+if(command == "--profile")
+{
+    run_profiles();
+    return 1;
+}
 
 
 

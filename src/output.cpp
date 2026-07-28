@@ -6,6 +6,7 @@
 
 #include "pi.h"
 
+#include <filesystem>
 #include <iostream>
 #include <cstdio>
 #include <string>
@@ -23,9 +24,9 @@ void save_pi(
     mpfr_t pi,
     long digits
 )
-{
+{   filesystem::create_directories("generated pi");
     string filename =
-        "pi_" + to_string(digits) + ".txt";
+        "geberated pi/pi_" + to_string(digits) + ".txt";
 
 
     cout

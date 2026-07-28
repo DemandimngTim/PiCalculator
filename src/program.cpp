@@ -5,8 +5,13 @@
 
 #include "pi.h"
 
+#include "profiles/profile_runtime.h"
+#include "profiles/profile_loader.h"
+#include "profiles/active_profile.h"
+
 #include <iostream>
 #include <chrono>
+#include <string>
 
 
 using namespace std;
@@ -26,33 +31,113 @@ int run_program(
 
     if(argc < 2)
     {
-
         cout
-        << "Usage: ./pi digits [depth]\n";
+        << "Usage:\n";
+        cout
+        << "./pi digits\n";
+        cout
+        << "./pi --profile-use name digits\n";
 
         return 1;
-
     }
 
 
 
+    int digit_argument = 1;
+
 
 
     // ==================================================
-    // Parse arguments
+    // Optional profile loading
     // ==================================================
 
+    if(string(argv[1]) == "--profile-use")
+    {
+
+        if(argc < 4)
+        {
+            cout
+            << "Usage: ./pi --profile-use name digits\n";
+
+            return 1;
+        }
+
+
+
+        string profile_name =
+            argv[2];
+
+
+
+        string profile_path =
+            "profiles/" +
+            profile_name +
+            ".profile";
+
+
+
+        if(!load_profile(
+            ACTIVE_PROFILE,
+            profile_path
+        ))
+        {
+            cout
+            << "Profile not found ❌\n";
+
+            return 1;
+        }
+
+
+
+        PROFILE_LOADED = true;
+
+
+
+        cout
+        << "Using profile: "
+        << ACTIVE_PROFILE.name
+        << "\n\n";
+
+
+
+        digit_argument = 3;
+    }
+
+
+
+    // ==================================================
+    // Parse digits
+    // ==================================================
 
     DIGITS =
-        parse_digits(argv[1]);
+        parse_digits(
+            argv[digit_argument]
+        );
 
 
 
-    if(argc > 2)
+    // ==================================================
+    // Apply profile settings
+    // ==================================================
+
+    if(PROFILE_LOADED)
     {
 
         MAX_TREE_DEPTH =
-            atoi(argv[2]);
+            ACTIVE_PROFILE.tree_depth;
+
+
+        NO_SAVE =
+            !ACTIVE_PROFILE.save_output;
+
+    }
+    else if(argc > digit_argument + 1)
+    {
+
+        MAX_TREE_DEPTH =
+            atoi(
+                argv[digit_argument + 1]
+            );
 
     }
 
@@ -71,14 +156,8 @@ int run_program(
 
 
 
-
-
-
     long terms =
         DIGITS / 14 + 2;
-
-
-
 
 
 
@@ -105,13 +184,9 @@ int run_program(
 
 
 
-
-
-
     // ==================================================
     // Binary split
     // ==================================================
-
 
     BS result;
 
@@ -153,14 +228,9 @@ int run_program(
 
 
 
-
-
-
-
     // ==================================================
     // MPFR conversion
     // ==================================================
-
 
     cout
     << "Calculating π with MPFR...\n";
@@ -203,14 +273,9 @@ int run_program(
 
 
 
-
-
-
-
     // ==================================================
     // Save output
     // ==================================================
-
 
     if(NO_SAVE)
     {
@@ -231,14 +296,9 @@ int run_program(
 
 
 
-
-
-
-
     // ==================================================
     // Cleanup
     // ==================================================
-
 
     mpfr_clear(
         pi
@@ -251,14 +311,8 @@ int run_program(
 
 
 
-
-
-
-
     auto total_end =
         chrono::high_resolution_clock::now();
-
-
 
 
 
@@ -277,7 +331,6 @@ int run_program(
         total_end
     )
     << "s\n";
-
 
 
     return 0;
