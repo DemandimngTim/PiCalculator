@@ -1,0 +1,16 @@
+name=123
+tree_depth=0
+thread_mode=Auto
+parallel=false
+save_output=true
+output_file=pi_digits.txt
+overwrite=false
+save_format=TXT
+algorithm=Chudnovsky
+math_backend=MPFR
+verify_after=false
+verify_level=1
+reference_source=Local
+show_emojis=true
+color_output=true
+verbose=false

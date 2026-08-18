@@ -1,0 +1,16 @@
+name=testing
+tree_depth=8
+thread_mode=Auto
+parallel=1
+save_output=0
+output_file=test.txt
+overwrite=0
+save_format=Binary
+algorithm=Chudnovsky
+precision_mode=MPFR
+verify_after=0
+verify_level=1
+reference_source=Local
+show_emojis=1
+color_output=1
+verbose=0
