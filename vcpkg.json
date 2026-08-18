@@ -1,0 +1,15 @@
+{
+
+  "name": "picalculator",
+
+  "version-string": "1.0.0",
+
+  "dependencies": [
+
+    "gmp",
+
+    "mpfr"
+
+  ]
+
+}
