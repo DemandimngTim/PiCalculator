@@ -212,7 +212,8 @@ double run_single_benchmark(
 
 
 void run_benchmark(
-    long digits
+    long digits,
+    bool show_median = false
 );
 
 

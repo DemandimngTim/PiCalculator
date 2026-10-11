@@ -5,7 +5,7 @@
 
 #include "pi.h"
 #include "commands.h"
-#include "profiles/profiles.h"
+#include "settings/Profiles/profiles.h"
 
 #include <iostream>
 #include <string>
@@ -27,9 +27,6 @@ void run_help(
 
 void show_version();
 
-void run_benchmark(
-    long digits
-);
 
 
 void run_benchmark_plus(

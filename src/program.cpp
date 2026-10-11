@@ -5,9 +5,9 @@
 
 #include "pi.h"
 
-#include "profiles/profile_runtime.h"
-#include "profiles/profile_loader.h"
-#include "profiles/active_profile.h"
+#include "settings/Profiles/profile_runtime.h"
+#include "settings/Profiles/profile_loader.h"
+#include "settings/Profiles/active_profile.h"
 
 #include <iostream>
 #include <chrono>
@@ -70,7 +70,7 @@ int run_program(
 
 
         string profile_path =
-            "profiles/" +
+            "settings/Profiles/" +
             profile_name +
             ".profile";
 

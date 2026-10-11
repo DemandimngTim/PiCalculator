@@ -1,0 +1,7 @@
+{
+    "tree_depth": 2,
+    "thread_mode": "Auto",
+    "parallel": true,
+    "save_output": true,
+    "progress_style": "legacy"
+}
